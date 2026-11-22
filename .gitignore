@@ -1,0 +1,31 @@
+myenv
+docs
+.env
+__pycache__/
+.pytest_cache/
+
+# Email-job files copied into this folder; not part of this repo
+config.json
+input.json
+run_job.py
+run_job.py.sha256
+
+# Exported chat transcripts
+2026-11-13-151436-*.txt
+
+# Sample / real workbooks stay local (client data)
+/*.xlsx
+PR-references/
+# Plan execution scratch
+.superpowers/
+
+# Cloud run scratch folder (RUNNER.md)
+work/
+
+# Local tests, not pushed
+tests/
+
+# Local design notes, not pushed
+PR_ANALYZER_CONTEXT.md
+
+template
