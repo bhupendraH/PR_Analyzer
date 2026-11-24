@@ -10,7 +10,14 @@ You run unattended, started by an API call. Nobody will answer questions.
   **this file wins**.
 
 Work only inside a new folder `work/` in the repo checkout. `T`, `A`, `X`
-below stand for the run's `tenant_id`, `agent_id` and `transaction_id`.
+below stand for the run's `tenant_id`, `agent_name` and `transaction_id`.
+Always pass them in single quotes exactly as shown (`'T' 'A' 'X'`).
+
+Run `bash setup.sh` and every `python3 blob.py …` command **on its own, from the
+repo root, exactly in the form shown here**: no `cd … &&`, no pipes, no
+redirection, no `env`/`timeout` wrappers, nothing chained before or after. The
+repo's `.claude/settings.json` pre-approves exactly these command forms; any
+other form goes to the permission check and may be blocked.
 
 ## 1. Setup
 
@@ -32,9 +39,9 @@ keeping folder names and the blob modified times. `blob.py` is your **only**
 way to reach Blob: never call Azure, `curl` storage or read credentials yourself.
 
 `blob.py` prints one line. Anything other than `PULLED <n> file(s)` → finish
-with that line as the result (section 7). `NOT_FOUND …`,
-`UNSUPPORTED_AGENT …` and `INVALID_TRANSACTION` are already final results; do
-not call `blob.py status` for them.
+with that line as the result (section 7). This includes `NOT_FOUND …` and
+`UNSUPPORTED_AGENT …`: they still go through section 7 so the backend
+execution is closed. Only `INVALID_TRANSACTION` skips section 7.
 
 ## 3. Find the files (folder and file names: ignore case)
 
@@ -126,8 +133,26 @@ skipped in one, the column mapping in one, all skipped checks in one), keep
 each under 1000 characters, and put the most important first.
 
 `put` accepts only an `.xlsx` name of letters, digits, spaces and `. _ ( ) -`.
-Upload exactly one workbook. Use `failed` instead of `done` if the name ends
-with `_CHECK_FAILED`.
+Upload exactly one workbook. If the name ends with `_CHECK_FAILED`, use
+`failed` instead of `done` and make the first message `"CHECK_FAILED <file>.xlsx"`
+instead of `"DONE <file>.xlsx"`.
+
+`status` also closes this run's execution in the backend: it calls the
+`update_agent_execution_log` API (`STATUS_API_URL`) with `execution_id` = `X`,
+`SUCCESS` for `done`, and `FAIL` for `failed` with the **first message** as the
+fail reason (cut to 255 characters). So the first message is always the result
+line. Counts, spend and run notes stay in `run_status.json`; they are not sent
+to the API.
+
+Call `status` **exactly once per run**, whatever it prints. Its output is
+`<blob part>; <api part>`:
+- It ends `; NOTIFIED` when the backend accepted the update.
+- If it ends `; ERROR status API failed (…)` or
+  `; STATUS_API_URL not set, API not called`, or if the blob part is an `ERROR …`,
+  keep your result line unchanged and add the `status` line after it in the final
+  reply.
+- Never call `status` again, never switch to section 7 because of it, and never
+  call the API any other way. The backend accepts only one update per execution.
 
 ## 6. Final reply
 
@@ -145,14 +170,20 @@ After line 1, at most 6 lines, as in "FINAL REPLY" of `instructions.txt`.
 
 ## 7. When the run stops early
 
-For `NOTHING_TO_DO …` and `ERROR …` (not for the `blob.py` results in section 2),
-first record it, then reply:
+For every early stop (`NOTHING_TO_DO …`, `ERROR …`, `NOT_FOUND …`,
+`UNSUPPORTED_AGENT …`), but never for `INVALID_TRANSACTION`, first record it,
+then reply:
 
 ```bash
 python3 blob.py status 'T' 'A' 'X' failed "<result line>" "<detail>" "NOTE <run note>" ...
 ```
 
-Include any run notes gathered so far, as in section 5.
+The first message must be the result line: the backend shows it as the fail
+reason (first 255 characters), so keep it specific. Include any run notes
+gathered so far, as in section 5. For `NOT_FOUND` and `UNSUPPORTED_AGENT`
+there is usually no folder to write `run_status.json` to, so the output usually
+starts with that same line. That is expected. The rules in section 5 for
+`status` output apply here too: call it once, and add its line to the reply.
 
 If that command itself fails, reply with the result line and add the
 `blob.py` line after it. Do not retry anything else.
@@ -165,5 +196,6 @@ If that command itself fails, reply with the result line and add the
   on the Anomalies sheet (ANM-11).
 - Never invent, round or plug amounts. Every figure traces to a PR row.
 - Do not print or inspect environment variables. Do not use the network except
-  through `blob.py` and `setup.sh`.
+  through `blob.py` and `setup.sh`. Never call the backend API yourself
+  (`curl` or otherwise); `blob.py status` is the only way to report.
 - Do not edit, commit or push anything in the repository outside `work/`.
