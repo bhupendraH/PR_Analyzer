@@ -59,9 +59,12 @@ from typing import Any, Callable, Mapping, Optional
 import requests
 
 _ID = re.compile(r"[A-Za-z0-9_-]+")
+# The agent name may have single spaces between words (the Blob folder is
+# "Financial Statement Analyzer"); tenant and transaction ids may not. No '/', '.', tabs.
+_AGENT_NAME = re.compile(r"[A-Za-z0-9_-]+(?: [A-Za-z0-9_-]+)*")
 _OUT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9 ._()-]{0,150}\.xlsx", re.I)
 _ERROR_CODE = re.compile(r"[A-Za-z0-9_]{1,64}")
-SUPPORTED_AGENT = "PR_Analyzer"  # the Blob folder name; matched ignoring case
+SUPPORTED_AGENT = "Financial Statement Analyzer"  # the Blob folder name; matched ignoring case
 ENV_VARS = ("AZURE_TENANT_ID", "AZURE_CLIENT_ID",
             "AZURE_STORAGE_ACCOUNT", "AZURE_STORAGE_CONTAINER")
 MAX_FILES = 60
@@ -334,6 +337,12 @@ def _status(ids, state: str, messages, environ, factory,
     return code, f"{line}; NOTIFIED"
 
 
+def _ids_valid(ids) -> bool:
+    tenant, agent, txn = ids
+    return bool(_ID.fullmatch(tenant or "") and _AGENT_NAME.fullmatch(agent or "")
+                and _ID.fullmatch(txn or ""))
+
+
 def run(argv: list, environ: Mapping[str, str],
         make_container: Optional[Callable[[Mapping[str, str]], Any]] = None,
         post: Optional[Callable] = None, sleep: Callable = time.sleep) -> tuple:
@@ -341,7 +350,7 @@ def run(argv: list, environ: Mapping[str, str],
         return 1, USAGE
     cmd, rest = argv[0], argv[1:]
     ids, extra = rest[:3], rest[3:]
-    if len(ids) != 3 or any(_ID.fullmatch(i or "") is None for i in ids):
+    if len(ids) != 3 or not _ids_valid(ids):
         return 1, "INVALID_TRANSACTION"
     if (cmd in ("pull", "put") and len(extra) != 1) or \
             (cmd == "status" and (len(extra) < 2 or extra[0] not in ("done", "failed"))):
