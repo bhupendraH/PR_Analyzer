@@ -20,11 +20,11 @@ The task clones `main`: push changes to these files before firing.
 
 Container `standardize-test`, one folder per run:
 `<tenant_id>/<agent_name>/<transaction_id>/`. Only `agent_name`
-`Financial Statement Analyzer` is handled (any case). Folder and file names
+`Purchase Register Analyzer` is handled (any case). Folder and file names
 are matched ignoring case.
 
 ```
-<tenant_id>/Financial Statement Analyzer/<transaction_id>/
+<tenant_id>/Purchase Register Analyzer/<transaction_id>/
   config/config.json         settings overrides (often just approval_limit; {} is valid)
   config/Outputformat.xlsx   output template (copy of template/Outputformat.xlsx)
   input/input.json           the period: {"from_month": "MMYYYY", "to_month": "MMYYYY"}
@@ -164,7 +164,7 @@ records the same line, and the backend gets `SUCCESS` for `DONE` and `FAIL`
 | `CHECK_FAILED <file>` | workbook uploaded (name ends `_CHECK_FAILED`), a verification failed |
 | `NOTHING_TO_DO <reason>` | no PR files for the month range in input.json |
 | `NOT_FOUND <tenant>/<agent>/<txn>` | run folder empty or missing (no `run_status.json` written; backend still gets `FAIL`) |
-| `UNSUPPORTED_AGENT <agent_name>` | only `Financial Statement Analyzer` is handled; Blob not touched; backend still gets `FAIL` |
+| `UNSUPPORTED_AGENT <agent_name>` | only `Purchase Register Analyzer` is handled; Blob not touched; backend still gets `FAIL` |
 | `INVALID_TRANSACTION` | payload is not three IDs of letters, digits, `-`, `_` (the agent name may also have single spaces between words); nothing is called |
 | `ERROR <reason>` | config, input.json or template missing or invalid, PR columns not found, Azure error (type/status/code only) |
 
@@ -176,7 +176,7 @@ JSON body:
 
 ```json
 {
-  "text": "{\"tenant_id\":\"de520ed0-b273-44be-9f23-63568dd13b9d\",\"agent_name\":\"Financial Statement Analyzer\",\"transaction_id\":\"TXN_001\"}"
+  "text": "{\"tenant_id\":\"de520ed0-b273-44be-9f23-63568dd13b9d\",\"agent_name\":\"Purchase Register Analyzer\",\"transaction_id\":\"TXN_001\"}"
 }
 ```
 
@@ -186,7 +186,7 @@ Set the four `AZURE_*` variables above plus `AZURE_CLIENT_SECRET` in the shell
 (locally there is no proxy to add it), then for example:
 
 ```powershell
-.\myenv\Scripts\python.exe blob.py pull de520ed0-b273-44be-9f23-63568dd13b9d 'Financial Statement Analyzer' TXN_001 work\run
+.\myenv\Scripts\python.exe blob.py pull de520ed0-b273-44be-9f23-63568dd13b9d 'Purchase Register Analyzer' TXN_001 work\run
 ```
 
 Leave `STATUS_API_URL` unset locally unless you mean to close that execution in

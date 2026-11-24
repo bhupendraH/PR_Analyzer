@@ -60,11 +60,11 @@ import requests
 
 _ID = re.compile(r"[A-Za-z0-9_-]+")
 # The agent name may have single spaces between words (the Blob folder is
-# "Financial Statement Analyzer"); tenant and transaction ids may not. No '/', '.', tabs.
+# "Purchase Register Analyzer"); tenant and transaction ids may not. No '/', '.', tabs.
 _AGENT_NAME = re.compile(r"[A-Za-z0-9_-]+(?: [A-Za-z0-9_-]+)*")
 _OUT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9 ._()-]{0,150}\.xlsx", re.I)
 _ERROR_CODE = re.compile(r"[A-Za-z0-9_]{1,64}")
-SUPPORTED_AGENT = "Financial Statement Analyzer"  # the Blob folder name; matched ignoring case
+SUPPORTED_AGENT = "Purchase Register Analyzer"  # the Blob folder name; matched ignoring case
 ENV_VARS = ("AZURE_TENANT_ID", "AZURE_CLIENT_ID",
             "AZURE_STORAGE_ACCOUNT", "AZURE_STORAGE_CONTAINER")
 MAX_FILES = 60

@@ -12,7 +12,7 @@ You run unattended, started by an API call. Nobody will answer questions.
 Work only inside a new folder `work/` in the repo checkout. `T`, `A`, `X`
 below stand for the run's `tenant_id`, `agent_name` and `transaction_id`.
 Always pass them in single quotes exactly as shown (`'T' 'A' 'X'`): the agent
-name contains spaces (`Financial Statement Analyzer`), and without quotes the
+name contains spaces (`Purchase Register Analyzer`), and without quotes the
 shell would split it into three arguments.
 
 Run `bash setup.sh` and every `python3 blob.py …` command **on its own, from the
