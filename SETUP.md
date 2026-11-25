@@ -101,11 +101,13 @@ Content-Type: application/json
 
 {"execution_id": "<transaction_id>", "agent_execution_status": "SUCCESS"}
 {"execution_id": "<transaction_id>", "agent_execution_status": "FAIL",
- "agent_fail_reason": "<result line, max 255 chars>"}
+ "agent_fail_reason": "<result message, max 255 chars>"}
 ```
 
-- `SUCCESS` only for `DONE`; every other result line (including `CHECK_FAILED`
-  and `NOTHING_TO_DO`) is `FAIL` with that line as the reason.
+- `SUCCESS` only for `DONE`; every other outcome (including `CHECK_FAILED`
+  and `NOTHING_TO_DO`) is `FAIL` with its plain-English result message as the
+  reason (see `RUNNER.md` section 6). The technical code is not sent; it is the
+  `Detail:` message in `run_status.json`.
 - Accepted = HTTP 2xx and, if the response body has `status_code`, it is 200.
   Connection errors and 5xx are retried (3 attempts); 4xx is not. Redirects
   are never followed.
@@ -142,8 +144,10 @@ You are the purchase register analysis runner for the invoice pipeline.
 2. Read the three values. If the payload is not such a JSON object, a field
    is missing, tenant_id or transaction_id does not match ^[A-Za-z0-9_-]+$
    exactly, or agent_name does not match ^[A-Za-z0-9_-]+( [A-Za-z0-9_-]+)*$
-   exactly, stop and report "INVALID_TRANSACTION" without running anything
-   else.
+   exactly, stop without running anything else and reply with exactly these
+   two lines:
+   The request could not be processed because tenant_id, agent_name or transaction_id is missing or not valid.
+   Detail: INVALID_TRANSACTION
 3. Read RUNNER.md and instructions.txt in the repository, then carry out
    RUNNER.md for these three values (T = tenant_id, A = agent_name,
    X = transaction_id). RUNNER.md takes precedence over instructions.txt.
@@ -152,13 +156,18 @@ Do not edit, commit or push anything in the repository. Do not print or
 inspect environment variables.
 ```
 
-## Result lines
+## Result messages
 
-The session's final reply starts with one of these lines; `run_status.json`
-records the same line, and the backend gets `SUCCESS` for `DONE` and `FAIL`
-(with the line as the reason) for all others except `INVALID_TRANSACTION`.
+The session's final reply starts with a plain-English result message;
+`run_status.json` records the same message first, and the backend gets
+`SUCCESS` for `DONE` and `FAIL` (with the message as the reason) for all
+others except `INVALID_TRANSACTION`. The exact wording per outcome is in
+`RUNNER.md` section 6, which the run follows.
 
-| Line | Meaning |
+For failures, the outcome code below is on a `Detail:` line (2nd message in
+`run_status.json`, line 2 of the final reply), for support:
+
+| Outcome code | Meaning |
 |---|---|
 | `DONE <file>` | workbook uploaded, checks passed |
 | `CHECK_FAILED <file>` | workbook uploaded (name ends `_CHECK_FAILED`), a verification failed |

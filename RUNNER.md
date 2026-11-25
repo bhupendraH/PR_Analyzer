@@ -9,6 +9,11 @@ You run unattended, started by an API call. Nobody will answer questions.
 - Where the two disagree about files, folders, saving or the final reply,
   **this file wins**.
 
+Outcomes are named below by their code (`ERROR template not found`,
+`NOTHING_TO_DO …`, …). The code is not what the run reports: the plain-English
+result message for each outcome is in section 6, and the code goes on the
+detail line.
+
 Work only inside a new folder `work/` in the repo checkout. `T`, `A`, `X`
 below stand for the run's `tenant_id`, `agent_name` and `transaction_id`.
 Always pass them in single quotes exactly as shown (`'T' 'A' 'X'`): the agent
@@ -40,8 +45,9 @@ This copies everything in `T/A/X/` except its output folder into `work/run/`,
 keeping folder names and the blob modified times. `blob.py` is your **only**
 way to reach Blob: never call Azure, `curl` storage or read credentials yourself.
 
-`blob.py` prints one line. Anything other than `PULLED <n> file(s)` → finish
-with that line as the result (section 7). This includes `NOT_FOUND …` and
+`blob.py` prints one line. Anything other than `PULLED <n> file(s)` → that
+line is the outcome: finish with its result message from section 6 and the
+line itself as the detail (section 7). This includes `NOT_FOUND …` and
 `UNSUPPORTED_AGENT …`: they still go through section 7 so the backend
 execution is closed. Only `INVALID_TRANSACTION` skips section 7.
 
@@ -121,8 +127,11 @@ Outcomes in `instructions.txt` that end the run:
 
 ```bash
 python3 blob.py put 'T' 'A' 'X' work/out/<file>.xlsx
-python3 blob.py status 'T' 'A' 'X' done "DONE <file>.xlsx" "<counts line>" "<spend line>" "NOTE <run note>" ...
+python3 blob.py status 'T' 'A' 'X' done "<DONE message>" "<counts line>" "<spend line>" "NOTE <run note>" ...
 ```
+
+- DONE message: the `DONE` result message from section 6, e.g.
+  `Purchase Register analysis completed for Feb 2025 to Apr 2025. Report: PR_Analysis_022025_042025.xlsx`
 
 - counts line: `Documents <n> | Suppliers <n> | Exceptions H <n> / M <n> / L <n> / Info <n>`
 - spend line: `Spend Rs <total> | Top supplier <p>% | Top 5 <p>% | HHI <n>`
@@ -136,39 +145,75 @@ each under 1000 characters, and put the most important first.
 
 `put` accepts only an `.xlsx` name of letters, digits, spaces and `. _ ( ) -`.
 Upload exactly one workbook. If the name ends with `_CHECK_FAILED`, use
-`failed` instead of `done` and make the first message `"CHECK_FAILED <file>.xlsx"`
-instead of `"DONE <file>.xlsx"`.
+`failed` instead of `done`, make the first message the `CHECK_FAILED` result
+message from section 6 instead of the DONE message, and put
+`"Detail: CHECK_FAILED <which check failed>"` right after it (before the counts
+line).
+
+If `put` itself fails, do not call `status` here: the `put` line is the
+outcome; finish with section 7.
 
 `status` also closes this run's execution in the backend: it calls the
 `update_agent_execution_log` API (`STATUS_API_URL`) with `execution_id` = `X`,
 `SUCCESS` for `done`, and `FAIL` for `failed` with the **first message** as the
 fail reason (cut to 255 characters). So the first message is always the result
-line. Counts, spend and run notes stay in `run_status.json`; they are not sent
-to the API.
+message. Details, counts, spend and run notes stay in `run_status.json`; they
+are not sent to the API.
 
 Call `status` **exactly once per run**, whatever it prints. Its output is
 `<blob part>; <api part>`:
 - It ends `; NOTIFIED` when the backend accepted the update.
 - If it ends `; ERROR status API failed (…)` or
   `; STATUS_API_URL not set, API not called`, or if the blob part is an `ERROR …`,
-  keep your result line unchanged and add the `status` line after it in the final
-  reply.
+  keep your result message unchanged and add the `status` line to the final
+  reply (section 6).
 - Never call `status` again, never switch to section 7 because of it, and never
   call the API any other way. The backend accepts only one update per execution.
 
-## 6. Final reply
+## 6. Result messages and final reply
 
-Line 1 is the result line, exactly one of:
+Every run ends with exactly one outcome. The outcome's **result message** is
+the first `status` message (the backend's fail reason) and line 1 of the final
+reply. Use the wording below exactly, filling only the placeholders:
 
-| Result line | When |
+- `{period}` = `from_month` and `to_month` from `input.json` as 3-letter
+  English month and year, `Feb 2025 to Apr 2025`; just `Feb 2025` if both are
+  the same month.
+- `{file}` = the uploaded workbook's file name (no folder).
+- `{agent}` = `A`, the agent name from the payload.
+
+| Outcome (old code) | Result message |
 |---|---|
-| `DONE <file name>` | the workbook was uploaded and all checks passed |
-| `CHECK_FAILED <file name>` | the workbook was uploaded but a check failed |
-| `NOTHING_TO_DO <reason>` | no PR files for the range |
-| `NOT_FOUND <T/A/X>` / `UNSUPPORTED_AGENT <A>` / `INVALID_TRANSACTION` | from `blob.py` |
-| `ERROR <reason>` | anything else that stopped the run |
+| `DONE <file>`: workbook uploaded, all checks passed | Purchase Register analysis completed for {period}. Report: {file} |
+| `CHECK_FAILED <file>`: workbook uploaded, a check failed | Purchase Register analysis completed for {period}, but some final checks did not pass. Please review the report before using it: {file} |
+| `NOTHING_TO_DO no PR files for <from>-<to>` | No Purchase Register files were found for {period}. Please upload the files and run again. |
+| `NOT_FOUND <T/A/X>` | The files for this request could not be found. Please upload them and run again. |
+| `UNSUPPORTED_AGENT <A>` | This request was for "{agent}", which this runner does not handle. Only Purchase Register Analyzer is supported. |
+| `ERROR config.json missing or invalid` | The configuration file (config.json) is missing or could not be read. |
+| `ERROR input.json missing or invalid` | The period file (input.json) is missing, or its from/to month is not valid. |
+| `ERROR template not found` | The output template was not found in the config folder. |
+| `ERROR PR columns not found` | A Purchase Register file has no Doc Ref column, or neither an Invoice Value nor a Taxable Value column. Please check the column headers and upload again. |
+| `ERROR too many files …` / `ERROR inputs too large …` | Too many files were uploaded (limit 60) or they are too large in total (limit 200 MB). |
+| `ERROR unsafe blob name …` | One of the uploaded file or folder names cannot be processed. Please rename it and upload again. |
+| `ERROR workbook too large …` | The report was created but is too large to save (limit 50 MB). Please run again for a shorter period. |
+| `ERROR AZURE_… not set` / `ERROR TokenError …` / `ERROR HttpResponseError …` / any other `ERROR <ExceptionType> …` from `blob.py` | Could not connect to file storage. Please contact support. |
+| `ERROR setup failed` | The run could not start because of a system problem. Please try again later or contact support. |
+| any other `ERROR …` (including other `blob.py` lines) | The Purchase Register analysis could not be completed because of an unexpected problem. Please contact support. |
+| `INVALID_TRANSACTION` | The request could not be processed because tenant_id, agent_name or transaction_id is missing or not valid. |
 
-After line 1, at most 6 lines, as in "FINAL REPLY" of `instructions.txt`.
+Result messages never contain IDs, paths or error codes. The technical reason
+goes on a **detail**: `Detail: <old code>`, filled in, e.g.
+`Detail: ERROR template not found` or
+`Detail: NOT_FOUND t1/Purchase Register Analyzer/x9` (for a `blob.py` outcome,
+its exact line; for `CHECK_FAILED`, which check failed).
+
+Final reply:
+
+1. Line 1: the result message.
+2. For every outcome except `DONE`: the detail line.
+3. The `status` line, only when section 5 says to add it.
+4. For `DONE` and `CHECK_FAILED`: at most 6 more lines, as in "FINAL REPLY"
+   of `instructions.txt`.
 
 ## 7. When the run stops early
 
@@ -177,18 +222,20 @@ For every early stop (`NOTHING_TO_DO …`, `ERROR …`, `NOT_FOUND …`,
 then reply:
 
 ```bash
-python3 blob.py status 'T' 'A' 'X' failed "<result line>" "<detail>" "NOTE <run note>" ...
+python3 blob.py status 'T' 'A' 'X' failed "<result message>" "Detail: <old code>" "NOTE <run note>" ...
 ```
 
-The first message must be the result line: the backend shows it as the fail
-reason (first 255 characters), so keep it specific. Include any run notes
-gathered so far, as in section 5. For `NOT_FOUND` and `UNSUPPORTED_AGENT`
-there is usually no folder to write `run_status.json` to, so the output usually
-starts with that same line. That is expected. The rules in section 5 for
-`status` output apply here too: call it once, and add its line to the reply.
+The first message must be the outcome's result message from section 6: the
+backend shows it as the fail reason (first 255 characters). The second is the
+detail line. Include any run notes gathered so far, as in section 5. For
+`NOT_FOUND` and `UNSUPPORTED_AGENT` there is usually no folder to write
+`run_status.json` to, so the `status` output usually starts with
+`NOT_FOUND …` / `UNSUPPORTED_AGENT …` again. That is expected. The rules in
+section 5 for `status` output apply here too: call it once, and add its line to
+the reply.
 
-If that command itself fails, reply with the result line and add the
-`blob.py` line after it. Do not retry anything else.
+If that command itself fails, reply with the result message and detail line,
+then the `blob.py` line. Do not retry anything else.
 
 ## 8. Rules
 
