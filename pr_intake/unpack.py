@@ -1,9 +1,11 @@
 """Collect PR files from the run's input/PR folder and unpack zips safely."""
 import calendar
+import datetime
 import hashlib
 import io
 import os
 import zipfile
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -13,6 +15,7 @@ from pr_intake.filetype import sniff
 _JUNK_NAMES = {".ds_store", "thumbs.db"}
 _EXT_KIND = {".xlsx": "xlsx", ".pdf": "pdf", ".txt": "text", ".csv": "text", ".zip": "zip"}
 _CHUNK = 64 * 1024
+_ZIP_ERRORS = (zipfile.BadZipFile, zlib.error, EOFError, NotImplementedError, ValueError, OSError)
 
 
 @dataclass
@@ -115,14 +118,20 @@ class _Collector:
         data = path.read_bytes()
         self._count(len(data), display)
         kind = sniff(data)
-        if kind == "zip":
-            self.unzip(data, display)
-        elif display.lower().endswith(".zip") and kind == "unsupported":
-            raise Rejection("ZIP_REJECTED", display, "cannot be opened")
+        if display.lower().endswith(".zip"):
+            if kind in ("zip", "xlsx"):
+                # A real zip container (an xlsx renamed .zip is still opened as a zip).
+                self.unzip(data, display, st.st_mtime)
+            elif kind == "unsupported":
+                raise Rejection("ZIP_REJECTED", display, "cannot be opened")
+            else:
+                self.add(display, data, st.st_mtime, path, None)
+        elif kind == "zip":
+            raise Rejection("UNSUPPORTED_FILE", display, "unsupported type")
         else:
             self.add(display, data, st.st_mtime, path, None)
 
-    def unzip(self, data: bytes, display: str) -> None:
+    def unzip(self, data: bytes, display: str, fallback_mtime: float) -> None:
         self.zip_n += 1
         zid = f"z{self.zip_n}"
         self.total -= len(data)  # the zip itself is not unpacked content
@@ -132,19 +141,24 @@ class _Collector:
 
         try:
             zf = zipfile.ZipFile(io.BytesIO(data))
-        except zipfile.BadZipFile:
+        except _ZIP_ERRORS:
             raise rej("cannot be opened") from None
         with zf:
+            all_names = [i.filename.rstrip("/").casefold() for i in zf.infolist()]
             seen = set()
             kept = []
             for zi in zf.infolist():
                 if zi.filename.endswith("/"):
                     continue
                 name = zi.filename
-                if (not _safe(name) or ((zi.external_attr >> 16) & 0o170000) == 0o120000
+                # orig_filename: zipfile rewrites a backslash to "/" on Windows; check the raw name.
+                if (not _safe(name) or not _safe(zi.orig_filename) or ((zi.external_attr >> 16) & 0o170000) == 0o120000
                         or name.casefold() in seen):
                     raise rej("unsafe paths")
                 seen.add(name.casefold())
+                folded = name.casefold() + "/"
+                if any(o.startswith(folded) for o in all_names):  # file/folder clash
+                    raise rej("unsafe paths")
                 if zi.flag_bits & 0x1:
                     raise rej("password protected")
                 if _is_junk(name):
@@ -157,29 +171,37 @@ class _Collector:
                 raise _too_many(display)
             if self.total + sum(z.file_size for z in kept) > limits.MAX_TOTAL_BYTES:
                 raise _too_big(display)
-            for zi in kept:
-                if zi.file_size > limits.MAX_ZIP_RATIO * max(zi.compress_size, 1):
-                    raise rej("too large when unpacked")
+            # Ratio is per zip (sum of sizes), not per entry.
+            if (sum(z.file_size for z in kept)
+                    > limits.MAX_ZIP_RATIO * max(sum(z.compress_size for z in kept), 1)):
+                raise rej("too large when unpacked")
 
             blobs = []
-            for zi in kept:
-                buf = bytearray()
-                with zf.open(zi) as f:
-                    while True:
-                        chunk = f.read(_CHUNK)
-                        if not chunk:
-                            break
-                        buf += chunk
-                        if len(buf) > zi.file_size:  # directory lied about the size
-                            raise rej("too large when unpacked")
-                        self._count(len(chunk), display)
-                blobs.append((zi, bytes(buf)))
+            try:
+                for zi in kept:
+                    buf = bytearray()
+                    # zipfile never yields more than the declared file_size and raises
+                    # BadZipFile on a CRC mismatch, so a lying directory cannot overrun.
+                    with zf.open(zi) as f:
+                        while True:
+                            chunk = f.read(_CHUNK)
+                            if not chunk:
+                                break
+                            buf += chunk
+                            self._count(len(chunk), display)
+                    blobs.append((zi, bytes(buf)))
+            except _ZIP_ERRORS:
+                raise rej("cannot be opened") from None
 
         for _, buf in blobs:
             if sniff(buf) == "zip":
                 raise rej("contains another zip")
         for zi, buf in blobs:
-            mtime = float(calendar.timegm(tuple(zi.date_time) + (0, 0, 0)))
+            try:
+                datetime.datetime(*zi.date_time)
+                mtime = float(calendar.timegm(tuple(zi.date_time) + (0, 0, 0)))
+            except (ValueError, OverflowError):
+                mtime = fallback_mtime
             dest = self.out_dir / "unzipped" / zid / Path(*zi.filename.split("/"))
             self.add(f"{display} > {zi.filename}", buf, mtime, None, dest)
 
