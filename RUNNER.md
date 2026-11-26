@@ -108,10 +108,14 @@ python3 blob.py status 'T' 'A' 'X' intake
 
 `blob.py` reads the intake manifest itself and sends the stored result message
 and detail; you never open `manifest.json`, previews, verdicts, extracted
-files or tables. Final reply: line 1 = the section 6 row for that code
-(same text, placeholders filled from the intake line), line 2 =
-`Detail: <the intake line>`, then the `status` line if section 5 says to add it. Intake notes and `credit_used` reach
-`run_status.json` and the API automatically. On an `ERROR` line there is no
+files or tables. The final reply is fixed (three lines):
+
+1. `The run stopped at the PR file check. The reason was sent to the backend and saved in run_status.json.`
+2. `Detail: <the intake line as printed>`
+3. the `status` output line
+
+Intake notes and `credit_used` reach `run_status.json` and the API
+automatically. On an `ERROR` line there is no
 manifest: use section 7 with the section 6 row.
 
 ## 3. Find the files (folder and file names: ignore case)
@@ -277,7 +281,8 @@ reply. Use the wording below exactly, filling only the placeholders:
 | `INVALID_TRANSACTION` | The request could not be processed because tenant_id, agent_name or transaction_id is missing or not valid. |
 
 For the intake rows, `status ... intake` (section 2b) sends the text from the
-manifest: do not rebuild it. In the rows above, `{why}` and `{file}` are filled by intake (names shortened to 60 characters,
+manifest: do not rebuild it. In the rows above, `{why}` and `{file}` are
+filled by intake (names shortened to 60 characters,
 the whole message to 255); `{and_more}` is ` and <n> more` or nothing.
 
 Result messages never contain IDs, paths or error codes. The technical reason
@@ -286,7 +291,10 @@ goes on a **detail**: `Detail: <old code>`, filled in, e.g.
 `Detail: NOT_FOUND t1/Purchase Register Analyzer/x9` (for a `blob.py` outcome,
 its exact line; for `CHECK_FAILED`, which check failed).
 
-Final reply:
+Final reply (for an intake stop, `REJECTED` or `NOTHING_TO_DO` from `prepare`
+or `verify`, it is the fixed three lines of section 2b instead: "The run
+stopped at the PR file check. The reason was sent to the backend and saved in
+run_status.json.", `Detail: <intake line>`, the `status` line):
 
 1. Line 1: the result message.
 2. For every outcome except `DONE`: the detail line.

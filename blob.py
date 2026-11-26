@@ -295,7 +295,8 @@ def read_intake_stop(path: Path) -> list:
     try:
         d = json.loads(path.read_text(encoding="utf-8"))
         msg, detail = d.get("result_message"), d.get("detail")
-        if d.get("decision") in ("REJECTED", "NOTHING_TO_DO") and isinstance(msg, str) and msg                 and isinstance(detail, str):
+        if d.get("decision") in ("REJECTED", "NOTHING_TO_DO") and isinstance(msg, str) and msg \
+                and isinstance(detail, str):
             return [msg, "Detail: " + detail]
     except Exception:
         pass
