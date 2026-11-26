@@ -7,10 +7,11 @@ import csv
 import json
 import math
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from statistics import mean
 
+from pr_intake import limits
 from pr_intake.fields import AMOUNT_FIELDS, FIELDS, match_fixed, normalise_header
 from pr_intake.gstin import is_valid_gstin
 from pr_intake.values import parse_amount
@@ -46,6 +47,7 @@ class Table:
     notes: list[str]
     ocr_rows: list[bool]
     ocr_conf: dict[str, float]
+    uncovered: list[str] = field(default_factory=list)  # PR data outside the recipe: row locations or sheets
 
 
 def _need(ok, msg: str) -> None:
@@ -343,6 +345,12 @@ def apply_recipe(extracted: dict, recipe: dict, file_id: str, source: str, ocr_p
 
     if kept:
         notes.append(f"{kept} rows matched a skip pattern but hold a Doc Ref and an amount; kept")
+    outside = [n for n in (*range(max(recipe["header_rows"], default=0) + 1, first), *range(last + 1, count + 1))
+               if _is_document({f: _cell(layout, get(n)[0], cols[f][0])[0] for f in fields})]
+    uncovered = [get(n)[2] for n in outside]
+    if uncovered:
+        notes.append(f"{len(uncovered)} rows outside data_rows {first}-{last} look like documents "
+                     f"(first at {uncovered[0]}); rows_dropped")
     if layout == "positioned":
         for p in ocr_pages:
             confs = [w["conf"] for ln in extracted["lines"] if ln["page"] == p
@@ -353,9 +361,34 @@ def apply_recipe(extracted: dict, recipe: dict, file_id: str, source: str, ocr_p
     return Table(file_id=file_id, source=source, sheet=recipe.get("sheet"), fields=fields, rows=rows,
                  locations=locs, copied=copied, mapping={f: cols[f][1] for f in fields},
                  entity=_entity(extracted, recipe, count, notes), skipped_rows=skipped,
-                 recipe_rows=last - first + 1, notes=notes, ocr_rows=ocr_rows, ocr_conf=ocr_conf)
+                 recipe_rows=last - first + 1, notes=notes, ocr_rows=ocr_rows, ocr_conf=ocr_conf,
+                 uncovered=uncovered)
+
+
+def _omitted_pr_sheets(extracted: dict, recipes: list[dict]) -> list[str]:
+    """xlsx sheets with no recipe whose first rows hold a fixed-list Doc Ref and value header."""
+    if extracted.get("kind") != "xlsx":
+        return []
+    used = {r.get("sheet") for r in recipes}
+    out = []
+    for sh in extracted["sheets"]:
+        if sh["name"] in used:
+            continue
+        for row in sh["rows"][:limits.OMITTED_SHEET_SCAN_ROWS]:
+            m = match_fixed(row)
+            if "doc_ref" in m and ("spend_value" in m or "taxable" in m):
+                out.append(sh["name"])
+                break
+    return out
 
 
 def apply_verdict(extracted: dict, verdict: dict, file_id: str, source: str, ocr_pages: list[int]) -> list[Table]:
-    """One Table per recipe (one per sheet for multi-sheet workbooks)."""
-    return [apply_recipe(extracted, r, file_id, source, ocr_pages) for r in verdict["recipes"]]
+    """One Table per recipe (one per sheet for multi-sheet workbooks).
+
+    A sheet left out of the recipes that has Purchase Register headers fails row_coverage on the first table.
+    """
+    tables = [apply_recipe(extracted, r, file_id, source, ocr_pages) for r in verdict["recipes"]]
+    for name in _omitted_pr_sheets(extracted, verdict["recipes"]):
+        tables[0].uncovered.append(f"sheet {_q(name)}")
+        tables[0].notes.append(f"sheet {_q(name)} has Purchase Register headers but no recipe; rows_dropped")
+    return tables

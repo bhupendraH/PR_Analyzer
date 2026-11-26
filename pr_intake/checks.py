@@ -98,7 +98,7 @@ def run_checks(t: Table) -> list[Check]:
 
     def coverage():
         add("rows_found", len(t.rows) >= 1, "no_rows")
-        add("row_coverage", len(t.rows) + t.skipped_rows == t.recipe_rows, "rows_dropped")
+        add("row_coverage", len(t.rows) + t.skipped_rows == t.recipe_rows and not t.uncovered, "rows_dropped")
 
     ok_req = ("doc_ref" in m and ("supplier_name" in m or "supplier_gstin" in m)
               and "invoice_date" in m and ("spend_value" in m or "taxable" in m))
