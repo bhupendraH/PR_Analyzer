@@ -13,6 +13,7 @@ from statistics import mean
 
 from pr_intake.fields import AMOUNT_FIELDS, FIELDS, match_fixed, normalise_header
 from pr_intake.gstin import is_valid_gstin
+from pr_intake.values import parse_amount
 
 KINDS = ("purchase_register", "sales_register", "ledger", "gstr_2a_2b", "bank_statement", "invoice", "other")
 LAYOUT_KIND = {"table": "xlsx", "delimited": "text", "fixed_width": "text", "positioned": "pdf"}
@@ -263,6 +264,19 @@ def _entity(extracted, recipe, count, notes) -> dict[str, str]:
     return out
 
 
+def _is_document(vals: dict[str, str]) -> bool:
+    """A Doc Ref and at least one amount that parses (zero allowed)."""
+    if not vals.get("doc_ref"):
+        return False
+    for f in AMOUNT_FIELDS:
+        try:
+            if f in vals and parse_amount(vals[f]) is not None:
+                return True
+        except ValueError:
+            pass
+    return False
+
+
 def apply_recipe(extracted: dict, recipe: dict, file_id: str, source: str, ocr_pages: list[int]) -> Table:
     check_recipe(recipe)
     layout = recipe["layout"]
@@ -289,14 +303,19 @@ def apply_recipe(extracted: dict, recipe: dict, file_id: str, source: str, ocr_p
         notes.append(f"data_rows.last {last} is past the end ({count}); rows after {count} not counted")
     skips = [re.compile(p) for p in recipe.get("skip_rows_matching", [])]
     rows, locs, copied, ocr_rows, ocr_conf = [], [], [], [], {}
-    skipped, group = 0, None
+    skipped, kept, group = 0, 0, None
     for n in range(first, min(last, count) + 1):
         rec, text, loc, page = get(n)
-        if not text.strip() or any(p.search(text) for p in skips):
+        if not text.strip():
             skipped += 1
             continue
         cells = {f: _cell(layout, rec, cols[f][0]) for f in fields}
         vals = {f: c[0] for f, c in cells.items()}
+        if any(p.search(text) for p in skips):
+            if not _is_document(vals):  # skip patterns are for layout noise, never for documents
+                skipped += 1
+                continue
+            kept += 1
         if co and rows and vals[co] and not any(v for f, v in vals.items() if f != co):
             rows[-1][co] = (rows[-1][co] + " " + vals[co]).strip()
             skipped += 1
@@ -320,6 +339,8 @@ def apply_recipe(extracted: dict, recipe: dict, file_id: str, source: str, ocr_p
         copied.append(cp)
         ocr_rows.append(is_ocr)
 
+    if kept:
+        notes.append(f"{kept} rows matched a skip pattern but hold a Doc Ref and an amount; kept")
     if layout == "positioned":
         for p in ocr_pages:
             confs = [w["conf"] for ln in extracted["lines"] if ln["page"] == p
