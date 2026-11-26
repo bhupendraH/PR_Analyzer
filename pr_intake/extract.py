@@ -42,6 +42,7 @@ def _extract_xlsx(path: str) -> dict:
         try:
             sheets = []
             for ws in wb.worksheets:
+                ws.reset_dimensions()
                 rows = [[_cell(c) for c in r] for r in ws.iter_rows(min_row=1, values_only=True)]
                 while rows and not any(rows[-1]):
                     rows.pop()
