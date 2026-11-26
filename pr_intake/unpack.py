@@ -45,17 +45,19 @@ def _safe(rel: str) -> bool:
                and not any(ord(ch) < 32 for ch in p) for p in parts)
 
 
-def find_pr_dir(run_dir: Path) -> Path | None:
-    def child(parent: Path, name: str) -> Path | None:
-        if not parent.is_dir():
-            return None
-        for c in sorted(parent.iterdir(), key=lambda p: p.name):
-            if c.is_dir() and c.name.lower() == name:
-                return c
+def child_dir(parent: Path, name: str) -> Path | None:
+    """The first sub-folder (by name) of parent whose lower-cased name is name; None if none."""
+    if not parent.is_dir():
         return None
+    for c in sorted(parent.iterdir(), key=lambda p: p.name):
+        if c.is_dir() and c.name.lower() == name:
+            return c
+    return None
 
-    inp = child(Path(run_dir), "input")
-    return child(inp, "pr") if inp else None
+
+def find_pr_dir(run_dir: Path) -> Path | None:
+    inp = child_dir(Path(run_dir), "input")
+    return child_dir(inp, "pr") if inp else None
 
 
 def _is_junk(path: str) -> bool:

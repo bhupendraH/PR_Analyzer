@@ -73,11 +73,35 @@ def _extract_text(path: str) -> dict:
 def _ocr_words(page: Any, page_no: int, ocr: Any) -> list[dict]:
     """OCR path for one page; isolated so the OCR engine can be wired in here.
 
-    Returns word dicts with keys x0, x1, top, text, conf.
+    Returns word dicts with keys x0, x1, top, text, conf (and Tesseract's block_num, par_num, line_num).
     """
     if ocr is None or not ocr.available():
         raise OcrUnavailable(page_no)
     return ocr.page_words(page, page_no)
+
+
+_OCR_LINE = ("block_num", "par_num", "line_num")
+
+
+def _group_lines(words: list[dict]) -> list[list[dict]]:
+    """Words -> lines, top to bottom, each sorted by x0.
+
+    OCR words carrying Tesseract's block/par/line numbers are grouped by them (in Tesseract's order);
+    other words by top: a word more than limits.LINE_TOP_TOL below the current line's first word starts a new line.
+    """
+    if words and all(k in w for w in words for k in _OCR_LINE):
+        groups: dict[tuple, list[dict]] = {}
+        for w in words:
+            groups.setdefault(tuple(int(w[k]) for k in _OCR_LINE), []).append(w)
+        lines = [groups[k] for k in sorted(groups)]
+    else:
+        lines = []
+        for w in sorted(words, key=lambda w: w["top"]):
+            if lines and w["top"] - lines[-1][0]["top"] <= limits.LINE_TOP_TOL:
+                lines[-1].append(w)
+            else:
+                lines.append([w])
+    return [sorted(ln, key=lambda w: w["x0"]) for ln in lines]
 
 
 def _extract_pdf(path: str, ocr: Any) -> dict:
@@ -95,11 +119,7 @@ def _extract_pdf(path: str, ocr: Any) -> dict:
                     if len(ocr_pages) > limits.MAX_OCR_PAGES:
                         raise TooManyOcrPages()
                     words = _ocr_words(page, pno, ocr)
-                groups: dict[int, list[dict]] = {}
-                for w in words:
-                    groups.setdefault(round(w["top"] / 3), []).append(w)
-                for key in sorted(groups):
-                    ws = sorted(groups[key], key=lambda w: w["x0"])
+                for ws in _group_lines(words):
                     lines.append({
                         "n": len(lines) + 1,
                         "page": pno,
@@ -136,18 +156,20 @@ def _flat(s: str) -> str:
     return re.sub(r"\r\n|\r|\n", "\\n", s)
 
 
-def _window(total: int) -> tuple[list[int], int]:
+def _window(total: int, head: int | None = None, tail: int | None = None) -> tuple[list[int], int]:
     """Indices (0-based) to show, and number omitted."""
-    head, tail = limits.PREVIEW_HEAD, limits.PREVIEW_TAIL
+    head = limits.PREVIEW_HEAD if head is None else head
+    tail = limits.PREVIEW_TAIL if tail is None else tail
     if total <= head + tail:
         return list(range(total)), 0
     return list(range(head)) + list(range(total - tail, total)), total - head - tail
 
 
-def _emit(out: list[str], total: int, fmt) -> None:
-    shown, omitted = _window(total)
+def _emit(out: list[str], total: int, fmt, head: int | None = None, tail: int | None = None) -> None:
+    shown, omitted = _window(total, head, tail)
+    tail = limits.PREVIEW_TAIL if tail is None else tail
     for i in shown:
-        if omitted and i == total - limits.PREVIEW_TAIL:
+        if omitted and i == total - tail:
             out.append(f"... {omitted} rows omitted ...")
         fmt(out, i)
 
@@ -156,14 +178,18 @@ def render_preview(extracted: dict, source: str) -> str:
     kind = extracted["kind"]
     out = [f"FILE: {source} | KIND: {kind}"]
     if kind == "xlsx":
-        for sh in extracted["sheets"]:
+        sheets = extracted["sheets"]
+        out.append(f"SHEETS: {len(sheets)} | " + ", ".join(_flat(sh["name"]) for sh in sheets))
+        many = len(sheets) > limits.PREVIEW_MANY_SHEETS
+        head, tail = (limits.PREVIEW_HEAD_MANY, limits.PREVIEW_TAIL_MANY) if many else (None, None)
+        for sh in sheets:
             rows = sh["rows"]
             total = len(rows)
             width = max([len(r) for r in rows] + [1])
             out.append(f"SHEET: {_flat(sh['name'])}")
             out.append("COLS | " + " | ".join(_col_letter(i) for i in range(width)))
             _emit(out, total, lambda o, i, rows=rows: o.append(
-                f"R{i + 1} | " + " | ".join(_flat(c) for c in rows[i])))
+                f"R{i + 1} | " + " | ".join(_flat(c) for c in rows[i])), head, tail)
             out.append(f"ROWS: {total}")
     elif kind == "text":
         lines = extracted["lines"]

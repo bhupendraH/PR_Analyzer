@@ -89,6 +89,11 @@ def _header_text(label: str) -> str:
     return re.sub(r"[^a-z0-9]", "", label.split(":", 1)[-1].lower())
 
 
+def _side_texts(t: Table, f: str) -> list[str]:
+    """Header text found in the column (every layout) and the mapping label, normalised."""
+    return [_header_text(t.mapping[f]), re.sub(r"[^a-z0-9]", "", t.headers.get(f, "").lower())]
+
+
 def run_checks(t: Table) -> list[Check]:
     m = set(t.mapping)
     checks: list[Check] = []
@@ -142,8 +147,8 @@ def run_checks(t: Table) -> list[Check]:
     add("tax_evidence", bool(m & {"taxable", *_TAX}), "no_tax_columns")
 
     sides = [f for f in ("supplier_name", "supplier_gstin") if f in m]
-    bad_side = any(_CUSTOMER.search(_header_text(t.mapping[f])) for f in sides)
-    bad_side = bad_side or any("sale" in _header_text(t.mapping[f]) for f in ("doc_ref", "transaction_type") if f in m)
+    bad_side = any(_CUSTOMER.search(x) for f in sides for x in _side_texts(t, f))
+    bad_side = bad_side or any("sale" in x for f in ("doc_ref", "transaction_type") if f in m for x in _side_texts(t, f))
     if "transaction_type" in m:
         tt = [_header_text(r.get("transaction_type", "")) for r in t.rows if r.get("transaction_type", "").strip()]
         bad_side = bad_side or (bool(tt) and sum("sale" in v for v in tt) / len(tt) >= 0.5)

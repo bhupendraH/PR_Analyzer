@@ -33,6 +33,8 @@ _TEMPLATES = {
                              "Please upload the files and run again."),
     "SCAN_UNREADABLE": ("A scanned page could not be read reliably: {file}, page {page}. "
                         "Please upload a clearer scan or the Excel/exported file."),
+    "REVIEW_FAILED": ("The PR files could not be checked because of a system problem. "
+                      "Please try again later or contact support."),
     "NOT_A_PR": ("The PR folder contains files that do not look like a Purchase Register: "
                  "{file} ({why}){and_more}. Please remove or replace them and run again."),
 }

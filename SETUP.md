@@ -177,6 +177,7 @@ For failures, the outcome code below is on a `Detail:` line (2nd message in
 | `CHECK_FAILED <file>` | workbook uploaded (name ends `_CHECK_FAILED`), a verification failed |
 | `NOTHING_TO_DO <reason>` | no PR files, or none for the month range in input.json |
 | `REJECTED NOT_A_PR …` | a file is not a Purchase Register (named in the message) |
+| `REJECTED REVIEW_FAILED …` | the reviewer gave no usable verdict for the rejected file(s) (system problem; the files may be fine) |
 | `REJECTED UNSUPPORTED_FILE …` | a file type that cannot be read |
 | `REJECTED ZIP_REJECTED …` | a zip that is nested, password protected, too large unpacked, unsafe or damaged |
 | `REJECTED TOO_LARGE …` | more than 60 files or more than 50 MB in total |

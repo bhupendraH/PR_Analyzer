@@ -6,6 +6,7 @@ from datetime import date
 from pathlib import Path
 
 from pr_intake.recipe import Table
+from pr_intake.unpack import child_dir
 from pr_intake.values import parse_date
 
 _NAMES = ("january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
@@ -42,11 +43,14 @@ def _valid_month(v) -> bool:
 
 
 def read_period(run_dir: Path) -> tuple[str, str]:
-    d = Path(run_dir) / "input"
+    """(from_month, to_month) from <run_dir>/input/input.json, folder and file name in any case."""
     try:
-        files = [p for p in d.iterdir() if p.is_file() and p.name.lower() == "input.json"]
+        d = child_dir(Path(run_dir), "input")
+        files = sorted(p for p in d.iterdir() if p.is_file() and p.name.lower() == "input.json") if d else []
+        if len(files) != 1:  # none, or case variants on a case-sensitive file system
+            raise PeriodError("input.json missing or invalid")
         data = json.loads(files[0].read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError, IndexError):
+    except (OSError, ValueError):
         raise PeriodError("input.json missing or invalid") from None
     if not isinstance(data, dict):
         raise PeriodError("input.json missing or invalid")

@@ -48,6 +48,7 @@ class Table:
     ocr_rows: list[bool]
     ocr_conf: dict[str, float]
     uncovered: list[str] = field(default_factory=list)  # PR data outside the recipe: row locations or sheets
+    headers: dict[str, str] = field(default_factory=dict)  # field -> header text read in its column (60 chars)
 
 
 def _need(ok, msg: str) -> None:
@@ -197,7 +198,10 @@ def _range_key(spec: dict):
 
 
 def _map_columns(layout, cols, header_recs, notes):
-    """Return field -> (column key, mapping label). Fixed header list first, reviewer fills the rest."""
+    """Return (field -> (column key, mapping label), column key -> header text).
+
+    Fixed header list first, reviewer fills the rest.
+    """
     by_header = layout in ("table", "delimited")
     if by_header:
         keys = list(range(max((len(r) for r in header_recs), default=0)))
@@ -227,7 +231,7 @@ def _map_columns(layout, cols, header_recs, notes):
             notes.append(f"{f}: reviewer chose {desc(k)}, fixed list reads it as {fixed_by_key[k]}; dropped (disagree)")
         else:
             out[f] = (k, label)
-    return out
+    return out, htext
 
 
 def _find_header(h: str, keys, htext):
@@ -286,7 +290,7 @@ def apply_recipe(extracted: dict, recipe: dict, file_id: str, source: str, ocr_p
     notes: list[str] = []
     count, get = _reader(extracted, recipe)
     _need(all(n <= count for n in recipe["header_rows"]), "a header row is past the end of the data")
-    cols = _map_columns(layout, recipe["columns"], [get(n)[0] for n in recipe["header_rows"]], notes)
+    cols, htext = _map_columns(layout, recipe["columns"], [get(n)[0] for n in recipe["header_rows"]], notes)
     fields = [f for f in FIELDS if f in cols]
 
     co = recipe.get("continuation_of")
@@ -362,7 +366,7 @@ def apply_recipe(extracted: dict, recipe: dict, file_id: str, source: str, ocr_p
                  locations=locs, copied=copied, mapping={f: cols[f][1] for f in fields},
                  entity=_entity(extracted, recipe, count, notes), skipped_rows=skipped,
                  recipe_rows=last - first + 1, notes=notes, ocr_rows=ocr_rows, ocr_conf=ocr_conf,
-                 uncovered=uncovered)
+                 uncovered=uncovered, headers={f: htext[cols[f][0]][:60] for f in fields})
 
 
 def _omitted_pr_sheets(extracted: dict, recipes: list[dict]) -> list[str]:

@@ -26,8 +26,11 @@ work/intake` **on its own, from the repo root, exactly in the form shown
 here**: no `cd … &&`, no pipes, no redirection, no `env`/`timeout` wrappers,
 nothing chained before or after. The same goes for `soffice` in section 4 and
 for each `pr-reviewer` call in section 2b (one Agent call per file, in exactly
-the form shown). The repo's `.claude/settings.json` pre-approves exactly these
-command forms; any other form goes to the permission check and may be blocked.
+the form shown). The repo's `.claude/settings.json` pre-approves only
+`python3 blob.py pull`, `python3 blob.py put`, `python3 blob.py status`,
+`bash setup.sh`, `python3 intake.py prepare` and `python3 intake.py verify`.
+Everything else, including `soffice` and the `pr-reviewer` calls, is not
+pre-approved: it goes to the permission check and may be blocked.
 
 ## 1. Setup
 
@@ -88,13 +91,13 @@ yourself. Then run:
 python3 intake.py verify work/run work/intake
 ```
 
-A missing or broken verdict is handled by `verify` (the file is rejected as
-could not be checked).
+A missing or broken verdict is handled by `verify`: the file could not be
+checked, and when no file is a real non-PR the run stops as `REVIEW_FAILED`.
 
 | Line | Next |
 |---|---|
 | `ACCEPTED <n> file(s)` | continue with section 3 |
-| `REJECTED NOT_A_PR <n> of <m> file(s)` / `REJECTED SCAN_UNREADABLE <file> page <p>` | intake stop (below) |
+| `REJECTED NOT_A_PR <n> of <m> file(s)` / `REJECTED REVIEW_FAILED <n> of <m> file(s)` / `REJECTED SCAN_UNREADABLE <file> page <p>` | intake stop (below) |
 | `NOTHING_TO_DO no PR files for <from>-<to>` | intake stop (below) |
 | `ERROR input.json missing or invalid` | finish with section 7 (section 6 row for input.json) |
 | any other `ERROR …` | finish with section 7 (section 6 "unexpected problem" row) |
@@ -262,6 +265,7 @@ reply. Use the wording below exactly, filling only the placeholders:
 | `NOTHING_TO_DO no PR files for <from>-<to>` (from `verify`) | No Purchase Register files were found for {period}. Please upload the files and run again. |
 | `NOTHING_TO_DO no PR files` (from `prepare`) | No Purchase Register files were found. Please upload the files and run again. |
 | `REJECTED NOT_A_PR …` | The PR folder contains files that do not look like a Purchase Register: {file} ({why}){and_more}. Please remove or replace them and run again. |
+| `REJECTED REVIEW_FAILED …` | The PR files could not be checked because of a system problem. Please try again later or contact support. |
 | `REJECTED UNSUPPORTED_FILE …` | The PR folder contains a file type that cannot be read: {file}. Supported: Excel (.xlsx), PDF, text (.txt, .csv) and .zip of these. |
 | `REJECTED ZIP_REJECTED …` | The zip file {file} cannot be opened safely ({why}). Please upload the files directly. |
 | `REJECTED SCAN_UNREADABLE …` | A scanned page could not be read reliably: {file}, page {page}. Please upload a clearer scan or the Excel/exported file. |

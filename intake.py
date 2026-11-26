@@ -19,7 +19,9 @@ Prints exactly one line and exits with:
     0  PREPARED <n> file(s) | ACCEPTED <n> file(s)
     1  USAGE ...
     3  ERROR <reason>
-    6  REJECTED <CODE> <file> | REJECTED NOT_A_PR <n> of <m> file(s) | REJECTED SCAN_UNREADABLE <file> page <p>
+    6  REJECTED <CODE> <file> | REJECTED NOT_A_PR <n> of <m> file(s) | REJECTED REVIEW_FAILED <n> of <m> file(s)
+       | REJECTED SCAN_UNREADABLE <file> page <p>
+       (REVIEW_FAILED: every rejected file could not be checked, i.e. its verdict is missing or broken)
     7  NOTHING_TO_DO no PR files | NOTHING_TO_DO no PR files for <from>-<to>
 """
 import csv
@@ -228,11 +230,16 @@ def verify(run_dir: Path, intake_dir: Path) -> tuple[int, str]:
         _add_detector_hits(states)
         notes = _notes(prep_notes, states, [])
         if bad:
-            first = bad[0]
-            msg = messages.result_message("NOT_A_PR", file=first.name, why=first.why, more=len(bad) - 1)
-            detail = "NOT_A_PR " + "; ".join(f"{st.name} ({st.why})" for st in bad)
-            _finish(intake_dir, states, "REJECTED", "NOT_A_PR", msg, detail, notes)
-            return 6, f"REJECTED NOT_A_PR {len(bad)} of {len(states)} file(s)"
+            bad.sort(key=lambda st: st.status != "NOT_PR")  # stable: a real NOT_PR file is named first
+            if bad[0].status == "NOT_PR":
+                code = "NOT_A_PR"
+                msg = messages.result_message(code, file=bad[0].name, why=bad[0].why, more=len(bad) - 1)
+            else:  # only reviewer failures: a system problem, not the customer's files
+                code = "REVIEW_FAILED"
+                msg = messages.result_message(code)
+            detail = f"{code} " + "; ".join(f"{st.name} ({st.why})" for st in bad)
+            _finish(intake_dir, states, "REJECTED", code, msg, detail, notes)
+            return 6, f"REJECTED {code} {len(bad)} of {len(states)} file(s)"
         first = scan[0]
         msg = messages.result_message("SCAN_UNREADABLE", file=first.name, page=first.page)
         detail = f"SCAN_UNREADABLE {first.name} page {first.page}"

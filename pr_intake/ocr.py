@@ -43,13 +43,14 @@ def parse_tsv(text: str) -> list[dict]:
                 continue
             conf = float(r["conf"])
             left, top, width = float(r["left"]), float(r["top"]), float(r["width"])
+            ids = {k: int(r[k]) for k in ("block_num", "par_num", "line_num")}
         except (KeyError, ValueError):
             continue
         t = r["text"].strip()
         if conf == -1 or not t:
             continue
         words.append({"x0": left * pt, "x1": (left + width) * pt, "top": top * pt,
-                      "text": t, "conf": conf})
+                      "text": t, "conf": conf, **ids})
     return words
 
 
