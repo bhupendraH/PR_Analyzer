@@ -191,7 +191,7 @@ def render_preview(extracted: dict, source: str) -> str:
 
         def fmt(o, i):
             ln = lines[i]
-            words = " ".join(f"{x['text']}@{round(x['x0'])}" for x in ln["words"])
+            words = " ".join(f"{x['text']}@{round(x['x0'])}-{round(x['x1'])}" for x in ln["words"])
             o.append(f"L{ln['n']:0{w}d} p{ln['page']} | {words}")
         _emit(out, total, fmt)
         out.append(f"ROWS: {total}")

@@ -318,12 +318,14 @@ def apply_recipe(extracted: dict, recipe: dict, file_id: str, source: str, ocr_p
             kept += 1
         if co and rows and vals[co] and not any(v for f, v in vals.items() if f != co):
             rows[-1][co] = (rows[-1][co] + " " + vals[co]).strip()
+            if co in copied[-1]:  # the cell now holds text read from the file, not only a copy
+                copied[-1].remove(co)
             skipped += 1
             continue
         cp = []
         if gf:
             if vals["doc_ref"]:
-                group = {f: vals[f] for f in gf}
+                group = vals  # live reference: later continuation joins on this row are carried down too
             elif group:
                 for f in gf:
                     if not vals[f] and group[f]:
