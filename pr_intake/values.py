@@ -1,3 +1,4 @@
+import math
 import re
 from datetime import date, datetime, timedelta
 
@@ -12,7 +13,7 @@ def parse_amount(s):
     if isinstance(s, bool):
         raise ValueError(f"not an amount: {s!r}")
     if isinstance(s, (int, float)):
-        return float(s)
+        return None if isinstance(s, float) and math.isnan(s) else float(s)
     t = str(s).strip()
     t = _CUR.sub("", t).strip()
     neg = False
@@ -35,6 +36,8 @@ def parse_amount(s):
     return -v if neg else v
 
 
+_TIME = re.compile(r"[ T]\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?$")
+_SERIAL = re.compile(r"^\d{5}(?:\.\d+)?$")
 _FORMATS = ("%d-%b-%Y", "%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d", "%d.%m.%Y", "%d-%b-%y")
 
 
@@ -43,12 +46,14 @@ def parse_date(s):
         return s.date()
     if isinstance(s, date):
         return s
+    if isinstance(s, str) and _SERIAL.match(s.strip()):
+        s = float(s.strip())
     if isinstance(s, (int, float)) and not isinstance(s, bool):
         if 20000 <= s <= 80000:
             return (datetime(1899, 12, 30) + timedelta(days=float(s))).date()
         return None
     if isinstance(s, str):
-        t = s.strip()
+        t = _TIME.sub("", s.strip()).strip()
         for f in _FORMATS:
             try:
                 return datetime.strptime(t, f).date()
