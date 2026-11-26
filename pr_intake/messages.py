@@ -27,8 +27,54 @@ _TEMPLATES = {
                   "(limit {max_mb} MB)."),
     "TOO_MANY_SCAN_PAGES": ("Too many scanned pages were uploaded (limit {max_ocr} pages). "
                             "Please upload the Excel or exported files instead."),
+    # NOTHING_TO_DO (no period) is used by prepare; NOTHING_TO_DO_PERIOD by the runner (spec section 9).
     "NOTHING_TO_DO": "No Purchase Register files were found. Please upload the files and run again.",
+    "NOTHING_TO_DO_PERIOD": ("No Purchase Register files were found for {period}. "
+                             "Please upload the files and run again."),
+    "SCAN_UNREADABLE": ("A scanned page could not be read reliably: {file}, page {page}. "
+                        "Please upload a clearer scan or the Excel/exported file."),
+    "NOT_A_PR": ("The PR folder contains files that do not look like a Purchase Register: "
+                 "{file} ({why}){and_more}. Please remove or replace them and run again."),
 }
+
+KIND_LABELS = {
+    "sales_register": "looks like a sales register",
+    "ledger": "looks like a ledger",
+    "gstr_2a_2b": "looks like a GSTR-2A/2B",
+    "bank_statement": "looks like a bank statement",
+    "invoice": "looks like an invoice",
+    "other": "not recognised as a Purchase Register",
+    "purchase_register": "not recognised as a Purchase Register",
+}
+
+_NOT_PR = "the columns a Purchase Register needs were not found"
+CHECK_SENTENCES = {
+    "missing_fields": _NOT_PR,
+    "no_rows": "no data rows were found",
+    "doc_ref_blank": "most rows have no document reference",
+    "gstin_invalid": "the column taken as supplier GSTIN mostly does not hold valid GSTINs",
+    "dates_invalid": "the invoice dates could not be read",
+    "amounts_invalid": "the amount columns hold values that are not numbers",
+    "totals_mismatch": "taxable value plus tax does not match the invoice totals",
+    "spend_includes_tax": "the value column includes tax",
+    "customer_side": "it looks like a sales (customer-side) register",
+    "rows_dropped": "some rows could not be read",
+    "no_tax_columns": "no tax columns were found",
+    "scan_low_confidence": "a scanned page could not be read reliably",
+    "scan_gstin_invalid": "a scanned page could not be read reliably",
+    "scan_totals_mismatch": "a scanned page could not be read reliably",
+    "unchecked": "could not be checked",
+}
+
+_MON = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def format_period(from_month: str, to_month: str) -> str:
+    """MMYYYY -> "Feb 2025 to Apr 2025", or "Feb 2025" when both are the same month."""
+    def one(m):
+        return f"{_MON[int(m[:2]) - 1]} {m[2:]}"
+    a, b = one(from_month), one(to_month)
+    return a if a == b else f"{a} to {b}"
 
 _DROP = set("\x0b\x0c\x85  ")
 
@@ -56,7 +102,7 @@ def result_message(outcome: str, file: str = "", page: int | None = None, why: s
     tpl = _TEMPLATES[outcome]
     if outcome == "ZIP_REJECTED":
         why = _ZIP_WHY.get(why, "damaged or unreadable")
-    vals = dict(file=file, page=page, why=why, more=more, period=period,
+    vals = dict(and_more=f" and {more} more" if more > 0 else "", file=file, page=page, why=why, more=more, period=period,
                 max_files=limits.MAX_FILES, max_mb=limits.MAX_TOTAL_BYTES // (1024 * 1024),
                 max_ocr=limits.MAX_OCR_PAGES)
     msg = tpl.format(**vals)
