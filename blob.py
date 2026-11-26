@@ -10,6 +10,12 @@ Usage:
         new or empty.
     python3 blob.py put    <tenant> <agent> <txn> <local_file.xlsx>
         Upload the workbook to RUN/<output folder>/<file name>.
+    python3 blob.py status <tenant> <agent> <txn> intake
+        The PR intake step stopped the run (REJECTED or NOTHING_TO_DO). Reads
+        work/intake/manifest.json itself and behaves like `failed` with the
+        messages [manifest result_message, "Detail: " + manifest detail]. A
+        missing or malformed manifest, or an ACCEPTED one, gives the fixed
+        "unexpected problem" message and "Detail: INTAKE_MANIFEST_MISSING".
     python3 blob.py status <tenant> <agent> <txn> done|failed <message> [<message> ...]
         1. Write RUN/<output folder>/run_status.json (all messages), unless the
            run folder is missing or the agent is unsupported.
@@ -84,7 +90,7 @@ MAX_BYTES = 50 * 1024 * 1024
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 MANIFEST_PATH = Path(__file__).resolve().parent / "work" / "intake" / "manifest.json"
 XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-USAGE = "USAGE blob.py pull|put|status <tenant_id> <agent_name> <transaction_id> ..."
+USAGE = "USAGE blob.py pull|put|status <tenant_id> <agent_name> <transaction_id> ... (status: done|failed <message>... | intake)"
 
 
 class _Fail(Exception):
@@ -279,6 +285,23 @@ def read_intake_notes(path: Path) -> list:
     return out
 
 
+INTAKE_FALLBACK = ("The Purchase Register analysis could not be completed because of an "
+                   "unexpected problem. Please contact support.")
+
+
+def read_intake_stop(path: Path) -> list:
+    """Messages for `status ... intake`: [result_message, "Detail: <detail>"] from a
+    REJECTED / NOTHING_TO_DO manifest, else the fixed fallback pair."""
+    try:
+        d = json.loads(path.read_text(encoding="utf-8"))
+        msg, detail = d.get("result_message"), d.get("detail")
+        if d.get("decision") in ("REJECTED", "NOTHING_TO_DO") and isinstance(msg, str) and msg                 and isinstance(detail, str):
+            return [msg, "Detail: " + detail]
+    except Exception:
+        pass
+    return [INTAKE_FALLBACK, "Detail: INTAKE_MANIFEST_MISSING"]
+
+
 def execution_body(execution_id: str, state: str, messages, credit_used: int) -> dict:
     """Body for the backend's update_agent_execution_log API."""
     if state == "done":
@@ -411,10 +434,13 @@ def run(argv: list, environ: Mapping[str, str],
     if len(ids) != 3 or not _ids_valid(ids):
         return 1, "INVALID_TRANSACTION"
     if (cmd in ("pull", "put") and len(extra) != 1) or \
-            (cmd == "status" and (len(extra) < 2 or extra[0] not in ("done", "failed"))):
+            (cmd == "status" and extra != ["intake"]
+             and (len(extra) < 2 or extra[0] not in ("done", "failed"))):
         return 1, USAGE
     factory = make_container or globals()["make_container"]
     if cmd == "status":
+        if extra == ["intake"]:
+            extra = ["failed", *read_intake_stop(manifest_path or MANIFEST_PATH)]
         return _status(ids, extra[0], extra[1:], environ, factory, post=post, sleep=sleep,
                        manifest_path=manifest_path)
     if not _is_supported_agent(ids[1]):

@@ -76,6 +76,7 @@ def format_period(from_month: str, to_month: str) -> str:
     a, b = one(from_month), one(to_month)
     return a if a == b else f"{a} to {b}"
 
+_SHELL_CHARS = set(chr(34) + chr(39) + "$`!" + chr(92))
 _DROP = set("\x0b\x0c\x85  ")
 
 
@@ -83,6 +84,9 @@ def safe_name(s: str) -> str:
     chars = []
     for ch in s:
         if ch in _DROP:
+            continue
+        if ch in _SHELL_CHARS:
+            chars.append("_")
             continue
         if ch.isspace():
             chars.append(" ")

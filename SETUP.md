@@ -166,6 +166,8 @@ The session's final reply starts with a plain-English result message;
 others except `INVALID_TRANSACTION`. The exact wording per outcome is in
 `RUNNER.md` section 6, which the run follows.
 
+Intake stops (`REJECTED …`, `NOTHING_TO_DO …`) are reported with `python3 blob.py status 'T' 'A' 'X' intake`: `blob.py` reads the manifest and sends its message and detail.
+
 For failures, the outcome code below is on a `Detail:` line (2nd message in
 `run_status.json`, line 2 of the final reply), for support:
 
