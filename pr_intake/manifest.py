@@ -18,6 +18,7 @@ class FileResult:
     reviewer_reason: str
     checks: list[dict]
     instruction_like: list[str]
+    entity: dict = field(default_factory=dict)  # entity_name / entity_gstin read from the file's header
 
 
 @dataclass
@@ -32,7 +33,8 @@ class Manifest:
 
 
 def write_manifest(path, m: Manifest) -> None:
-    m.credit_used = sum(1 for f in m.files if f.accepted)
+    """credit_used is recomputed: accepted files, or 0 when the run is REJECTED."""
+    m.credit_used = 0 if m.decision == "REJECTED" else sum(1 for f in m.files if f.accepted)
     Path(path).write_text(json.dumps(asdict(m), indent=2, ensure_ascii=False), encoding="utf-8")
 
 

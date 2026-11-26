@@ -23,6 +23,7 @@ class Check:
     name: str
     passed: bool
     code: str
+    where: str = ""  # OCR checks: first failing location ("p<page>:L<n>", "page:<n>" or a row location)
 
 
 def _share_ok(good: int, total: int, minimum: float) -> bool:
@@ -78,6 +79,12 @@ def _arith_docs(t: Table) -> list[tuple[list[int], bool]]:
     return out
 
 
+def _page_of(loc: str) -> int:
+    """Page number of an OCR location ("page:<n>" or "p<n>:L<m>"); 0 when it holds none."""
+    mt = re.fullmatch(r"page:(\d+)|p(\d+):L\d+", loc)
+    return int(mt.group(1) or mt.group(2)) if mt else 0
+
+
 def _header_text(label: str) -> str:
     return re.sub(r"[^a-z0-9]", "", label.split(":", 1)[-1].lower())
 
@@ -86,8 +93,8 @@ def run_checks(t: Table) -> list[Check]:
     m = set(t.mapping)
     checks: list[Check] = []
 
-    def add(name, ok, code):
-        checks.append(Check(name, bool(ok), code))
+    def add(name, ok, code, where=""):
+        checks.append(Check(name, bool(ok), code, "" if ok else where))
 
     def coverage():
         add("rows_found", len(t.rows) >= 1, "no_rows")
@@ -143,11 +150,14 @@ def run_checks(t: Table) -> list[Check]:
     add("purchase_side", not bad_side, "customer_side")
 
     if any(t.ocr_rows):
-        bad = any(v < limits.OCR_MIN_MEAN_CONF for k, v in t.ocr_conf.items() if k.startswith("page:")) or \
-            any(v < limits.OCR_MIN_CELL_CONF for k, v in t.ocr_conf.items() if not k.startswith("page:"))
-        add("ocr_confidence", not bad, "scan_low_confidence")
+        bad = [k for k, v in t.ocr_conf.items()
+               if v < (limits.OCR_MIN_MEAN_CONF if k.startswith("page:") else limits.OCR_MIN_CELL_CONF)]
+        bad.sort(key=_page_of)  # stable: lowest page first, insertion order within a page
+        add("ocr_confidence", not bad, "scan_low_confidence", bad[0] if bad else "")
         if "supplier_gstin" in m:
-            add("ocr_gstin", all(_gstin_ok(v) for i, v in _gstin_values(t) if t.ocr_rows[i]), "scan_gstin_invalid")
+            gbad = [t.locations[i] for i, v in _gstin_values(t) if t.ocr_rows[i] and not _gstin_ok(v)]
+            add("ocr_gstin", not gbad, "scan_gstin_invalid", gbad[0] if gbad else "")
         if arith_possible:
-            add("ocr_totals", all(g for idxs, g in _arith_docs(t) if t.ocr_rows[idxs[0]]), "scan_totals_mismatch")
+            tbad = [t.locations[idxs[0]] for idxs, g in _arith_docs(t) if t.ocr_rows[idxs[0]] and not g]
+            add("ocr_totals", not tbad, "scan_totals_mismatch", tbad[0] if tbad else "")
     return checks
