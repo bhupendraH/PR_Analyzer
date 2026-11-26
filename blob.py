@@ -23,7 +23,9 @@ Usage:
         "credit_used" integer of work/intake/manifest.json, which intake.py
         writes. A missing manifest (run stopped before intake) gives 0; an
         unreadable one gives 0 and "manifest unreadable, credit_used 0" is
-        appended to the status line. It is also recorded in run_status.json.
+        appended to the status line. It is also recorded in run_status.json, together with
+        the manifest's "notes" as "intake_notes" (at most 50, 300 chars each; the API
+        body is unchanged).
 
 Limits: a pull is refused above 60 files or 50 MB of inputs in total; the
 uploaded workbook may be at most 50 MB.
@@ -259,6 +261,24 @@ def read_credit_used(path: Path) -> tuple:
     return value, ""
 
 
+def read_intake_notes(path: Path) -> list:
+    """Notes from the intake manifest for run_status.json: at most 50 strings, control
+    characters removed, each cut to 300 characters. Anything unusable gives []."""
+    try:
+        notes = json.loads(path.read_text(encoding="utf-8")).get("notes")
+    except Exception:
+        return []
+    if not isinstance(notes, list):
+        return []
+    out = []
+    for n in notes:
+        if isinstance(n, str):
+            out.append("".join(ch for ch in n if ch.isprintable() or ch == " ")[:300])
+        if len(out) == 50:
+            break
+    return out
+
+
 def execution_body(execution_id: str, state: str, messages, credit_used: int) -> dict:
     """Body for the backend's update_agent_execution_log API."""
     if state == "done":
@@ -319,7 +339,7 @@ def _is_supported_agent(agent: str) -> bool:
 
 
 def _write_status_blob(ids, state: str, messages, environ, factory,
-                       credit_used: int = 0) -> tuple:
+                       credit_used: int = 0, intake_notes=()) -> tuple:
     """Blob part of `status`: write RUN/<output>/run_status.json. Never raises."""
     if not _is_supported_agent(ids[1]):
         return 5, f"UNSUPPORTED_AGENT {ids[1]}"
@@ -332,6 +352,7 @@ def _write_status_blob(ids, state: str, messages, environ, factory,
         "session_id": environ.get("CLAUDE_CODE_REMOTE_SESSION_ID", ""),
         "status": state,
         "credit_used": credit_used,
+        "intake_notes": list(intake_notes),
         "messages": [m[:1000] for m in messages[:20]],
         "finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
@@ -357,7 +378,8 @@ def _status(ids, state: str, messages, environ, factory,
     """
     credit_used, note = read_credit_used(manifest_path or MANIFEST_PATH)
     suffix = f"; {note}" if note else ""
-    code, line = _write_status_blob(ids, state, messages, environ, factory, credit_used)
+    code, line = _write_status_blob(ids, state, messages, environ, factory, credit_used,
+                                    read_intake_notes(manifest_path or MANIFEST_PATH))
     url = environ.get("STATUS_API_URL", "")
     if not url:
         return code, f"{line}; STATUS_API_URL not set, API not called{suffix}"
