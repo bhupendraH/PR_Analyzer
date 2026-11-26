@@ -16,7 +16,17 @@ Usage:
         2. Then, whatever step 1 returned, close the backend execution: POST to
            STATUS_API_URL (update_agent_execution_log) with execution_id = <txn>,
            SUCCESS for done, FAIL for failed with the first message (max 255
-           chars) as agent_fail_reason.
+           chars) as agent_fail_reason. Body:
+           {"execution_id": "<txn>", "agent_execution_status": "SUCCESS"|"FAIL",
+            "agent_fail_reason": null | "<first message>", "credit_used": <int>}
+        credit_used is read by this script (never passed in) from the top-level
+        "credit_used" integer of work/intake/manifest.json, which intake.py
+        writes. A missing manifest (run stopped before intake) gives 0; an
+        unreadable one gives 0 and "manifest unreadable, credit_used 0" is
+        appended to the status line. It is also recorded in run_status.json.
+
+Limits: a pull is refused above 60 files or 50 MB of inputs in total; the
+uploaded workbook may be at most 50 MB.
 
 <output folder> is RUN's existing output folder with its own spelling
 ("Output", "OUTPUT", ...), else "output". Reads stay inside RUN, writes stay
@@ -68,8 +78,9 @@ SUPPORTED_AGENT = "Purchase Register Analyzer"  # the Blob folder name; matched 
 ENV_VARS = ("AZURE_TENANT_ID", "AZURE_CLIENT_ID",
             "AZURE_STORAGE_ACCOUNT", "AZURE_STORAGE_CONTAINER")
 MAX_FILES = 60
-MAX_BYTES = 200 * 1024 * 1024
+MAX_BYTES = 50 * 1024 * 1024
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+MANIFEST_PATH = Path(__file__).resolve().parent / "work" / "intake" / "manifest.json"
 XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 USAGE = "USAGE blob.py pull|put|status <tenant_id> <agent_name> <transaction_id> ..."
 
@@ -230,13 +241,32 @@ def _put(container, run: str, local_file: str) -> tuple:
     return 0, f"UPLOADED {name}"
 
 
-def execution_body(execution_id: str, state: str, messages) -> dict:
+def read_credit_used(path: Path) -> tuple:
+    """(credit_used, note) from the intake manifest. note is '' when fine.
+
+    Missing file -> (0, ""). Unreadable, non-dict, missing key, non-int (bool
+    included) or negative -> (0, "manifest unreadable, credit_used 0").
+    """
+    bad = (0, "manifest unreadable, credit_used 0")
+    try:
+        if not path.is_file():
+            return 0, ""
+        value = json.loads(path.read_text(encoding="utf-8")).get("credit_used")
+    except Exception:  # never echo str(exc)
+        return bad
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return bad
+    return value, ""
+
+
+def execution_body(execution_id: str, state: str, messages, credit_used: int) -> dict:
     """Body for the backend's update_agent_execution_log API."""
     if state == "done":
-        return {"execution_id": execution_id, "agent_execution_status": "SUCCESS"}
-    reason = (messages[0] if messages else "failed")[:255]
-    return {"execution_id": execution_id, "agent_execution_status": "FAIL",
-            "agent_fail_reason": reason}
+        status, reason = "SUCCESS", None
+    else:
+        status, reason = "FAIL", (messages[0] if messages else "failed")[:255]
+    return {"execution_id": execution_id, "agent_execution_status": status,
+            "agent_fail_reason": reason, "credit_used": credit_used}
 
 
 def _body_status_code(resp):
@@ -288,7 +318,8 @@ def _is_supported_agent(agent: str) -> bool:
     return agent.casefold() == SUPPORTED_AGENT.casefold()
 
 
-def _write_status_blob(ids, state: str, messages, environ, factory) -> tuple:
+def _write_status_blob(ids, state: str, messages, environ, factory,
+                       credit_used: int = 0) -> tuple:
     """Blob part of `status`: write RUN/<output>/run_status.json. Never raises."""
     if not _is_supported_agent(ids[1]):
         return 5, f"UNSUPPORTED_AGENT {ids[1]}"
@@ -300,6 +331,7 @@ def _write_status_blob(ids, state: str, messages, environ, factory) -> tuple:
         "tenant_id": ids[0], "agent_name": ids[1], "transaction_id": ids[2],
         "session_id": environ.get("CLAUDE_CODE_REMOTE_SESSION_ID", ""),
         "status": state,
+        "credit_used": credit_used,
         "messages": [m[:1000] for m in messages[:20]],
         "finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
@@ -316,25 +348,28 @@ def _write_status_blob(ids, state: str, messages, environ, factory) -> tuple:
 
 
 def _status(ids, state: str, messages, environ, factory,
-            post: Optional[Callable] = None, sleep: Callable = time.sleep) -> tuple:
+            post: Optional[Callable] = None, sleep: Callable = time.sleep,
+            manifest_path: Optional[Path] = None) -> tuple:
     """Write run_status.json, then close the backend execution (execution_id = txn).
 
     The API part runs whatever the Blob part returned, so the execution is closed
     even when the run folder is missing or Blob fails.
     """
-    code, line = _write_status_blob(ids, state, messages, environ, factory)
+    credit_used, note = read_credit_used(manifest_path or MANIFEST_PATH)
+    suffix = f"; {note}" if note else ""
+    code, line = _write_status_blob(ids, state, messages, environ, factory, credit_used)
     url = environ.get("STATUS_API_URL", "")
     if not url:
-        return code, f"{line}; STATUS_API_URL not set, API not called"
+        return code, f"{line}; STATUS_API_URL not set, API not called{suffix}"
     headers = {"Accept": "application/json"}
     key = environ.get("ROUTINE_UPDATE_KEY", "")
     if key:
         headers["X-Routine-Key"] = key
-    reason = notify_api(url, execution_body(ids[2], state, messages), headers,
+    reason = notify_api(url, execution_body(ids[2], state, messages, credit_used), headers,
                         post=post, sleep=sleep)
     if reason:
-        return (code or 4), f"{line}; ERROR status API failed ({reason})"
-    return code, f"{line}; NOTIFIED"
+        return (code or 4), f"{line}; ERROR status API failed ({reason}){suffix}"
+    return code, f"{line}; NOTIFIED{suffix}"
 
 
 def _ids_valid(ids) -> bool:
@@ -345,7 +380,8 @@ def _ids_valid(ids) -> bool:
 
 def run(argv: list, environ: Mapping[str, str],
         make_container: Optional[Callable[[Mapping[str, str]], Any]] = None,
-        post: Optional[Callable] = None, sleep: Callable = time.sleep) -> tuple:
+        post: Optional[Callable] = None, sleep: Callable = time.sleep,
+        manifest_path: Optional[Path] = None) -> tuple:
     if not argv or argv[0] not in ("pull", "put", "status"):
         return 1, USAGE
     cmd, rest = argv[0], argv[1:]
@@ -357,7 +393,8 @@ def run(argv: list, environ: Mapping[str, str],
         return 1, USAGE
     factory = make_container or globals()["make_container"]
     if cmd == "status":
-        return _status(ids, extra[0], extra[1:], environ, factory, post=post, sleep=sleep)
+        return _status(ids, extra[0], extra[1:], environ, factory, post=post, sleep=sleep,
+                       manifest_path=manifest_path)
     if not _is_supported_agent(ids[1]):
         return 5, f"UNSUPPORTED_AGENT {ids[1]}"
     for name in ENV_VARS:
