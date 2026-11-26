@@ -10,5 +10,5 @@ transaction-level exceptions.
 - `SETUP.md`: Blob layout, cloud environment, saved prompt, fire call
 - `blob.py`: Blob I/O, limited to one run folder
 - `intake.py`, `pr_intake/`: PR intake (xlsx, pdf, txt, csv, zip; OCR for scans), the only step that reads the PR files
-- `.claude/agents/pr-reviewer.md`: reviewer agent used by intake, one file at a time
+- `.claude/agents/pr-reviewer.md`: read-only reviewer agent used by intake, one file at a time (its reply is saved as the verdict)
 - `template/`: output template generator

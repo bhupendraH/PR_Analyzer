@@ -11,7 +11,7 @@ workbook. Claude does the analysis itself:
 | `RUNNER.md` | **how** a cloud run works: download, find files, deliver, report |
 | `blob.py` | the only way the run touches Blob; reads stay in the run folder, writes stay in its output folder |
 | `intake.py`, `pr_intake/` | PR intake: reads the uploaded PR files, builds the tables the analysis uses, rejects files that are not a Purchase Register |
-| `.claude/agents/pr-reviewer.md` | the reviewer agent that judges one extracted file at a time (used only by intake) |
+| `.claude/agents/pr-reviewer.md` | the read-only reviewer agent that judges one extracted file at a time and replies with its verdict (used only by intake) |
 | `setup.sh` | installs Python packages and (best effort) LibreOffice and tesseract-ocr |
 | `template/make_template.py` | builds `template/Outputformat.xlsx`, the output template |
 

@@ -159,9 +159,19 @@ def check_recipe(r) -> None:
         _need(_range_ok(a, b, ints), "entity_from_header range is invalid")
 
 
+_FENCE = re.compile(r"```(?:json)?[ \t]*\n(.*)\n[ \t]*```", re.S)
+
+
+def _unfence(text: str) -> str:
+    """The text, or the inside of one surrounding ``` / ```json fence."""
+    text = text.strip()
+    m = _FENCE.fullmatch(text)
+    return m.group(1) if m else text
+
+
 def load_verdict(path: Path, file_id: str) -> dict:
     try:
-        v = json.loads(Path(path).read_text(encoding="utf-8-sig"))
+        v = json.loads(_unfence(Path(path).read_text(encoding="utf-8-sig")))
     except (OSError, ValueError):
         raise VerdictError("verdict is missing or not valid JSON") from None
     _need(isinstance(v, dict), "verdict is not an object")
