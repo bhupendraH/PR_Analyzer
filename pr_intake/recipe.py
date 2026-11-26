@@ -265,8 +265,8 @@ def _entity(extracted, recipe, count, notes) -> dict[str, str]:
 
 
 def _is_document(vals: dict[str, str]) -> bool:
-    """A Doc Ref and at least one amount that parses (zero allowed)."""
-    if not vals.get("doc_ref"):
+    """A Doc Ref holding a digit (total labels have none) and an amount that parses (zero allowed)."""
+    if not re.search(r"\d", vals.get("doc_ref", "")):
         return False
     for f in AMOUNT_FIELDS:
         try:
