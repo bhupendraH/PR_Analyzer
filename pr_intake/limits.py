@@ -15,6 +15,6 @@ DOC_REF_MIN = 0.95  # PROVISIONAL
 GSTIN_MIN = 0.80  # PROVISIONAL
 DATE_MIN = 0.95  # PROVISIONAL
 AMOUNT_MIN = 0.99  # PROVISIONAL
-ARITH_MIN = 0.80  # PROVISIONAL: measured on PR-references: 84.6% (Apr), 82.3% (Feb), 83.7% (Mar); the rest are zero-tax-column invoices (taxable 0, total = spend)
+ARITH_MIN = 0.90  # PROVISIONAL
 ARITH_TOL = 1.0  # PROVISIONAL
 SPEND_TAX_INCL_MAX = 0.90  # PROVISIONAL

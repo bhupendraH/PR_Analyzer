@@ -69,7 +69,11 @@ def _arith_docs(t: Table) -> list[tuple[list[int], bool]]:
             continue
         if "transaction_type" in t.fields and first.get("transaction_type", "").strip().lower() == "journal":
             continue
-        s = sum(_num(t.rows[i].get(f)) for i in idxs for f in ("taxable", *_TAX) if f in t.fields)
+        taxable = sum(_num(t.rows[i].get("taxable")) for i in idxs)
+        tax = sum(_num(t.rows[i].get(f)) for i in idxs for f in _TAX)
+        if taxable == 0 and tax == 0:  # no tax breakdown recorded: cannot be checked arithmetically
+            continue
+        s = taxable + tax
         out.append((idxs, abs(s - _num(first["invoice_total"])) <= limits.ARITH_TOL))
     return out
 
