@@ -1,6 +1,7 @@
 """All intake limits and thresholds. Every value is PROVISIONAL until real PDF/txt samples arrive."""
 
 MAX_FILES = 60  # PROVISIONAL
+MAX_ZIP_ENTRIES = 10 * MAX_FILES  # PROVISIONAL: entries in one zip (folders and junk included)
 MAX_TOTAL_BYTES = 50 * 1024 * 1024  # PROVISIONAL
 MAX_ZIP_RATIO = 100  # PROVISIONAL
 MAX_OCR_PAGES = 200  # PROVISIONAL

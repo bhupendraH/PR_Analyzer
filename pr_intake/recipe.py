@@ -12,6 +12,7 @@ from pathlib import Path
 from statistics import mean
 
 from pr_intake import limits
+from pr_intake.extract import flat
 from pr_intake.fields import AMOUNT_FIELDS, FIELDS, match_fixed, normalise_header
 from pr_intake.gstin import is_valid_gstin
 from pr_intake.values import parse_amount
@@ -67,6 +68,44 @@ def _range_ok(a, b, ints: bool) -> bool:
     return nums and a <= b
 
 
+_MAX_PATTERN = 200
+
+
+def _nested_quantifier(p: str) -> bool:
+    """True if a group holding + or * (directly or in a quantified inner group) is itself quantified by + * or {.
+
+    Such patterns, e.g. "(a+)+$", can take exponential time on a crafted row.
+    """
+    stack: list[bool] = []  # per open group: does it hold a + or * quantifier?
+    i, in_class = 0, False
+    while i < len(p):
+        c = p[i]
+        if c == "\\":
+            i += 2
+            continue
+        if in_class:
+            in_class = c != "]"
+        elif c == "[":
+            in_class = True
+            i += 1 + (p[i + 1:i + 2] == "^")
+            if p[i:i + 1] == "]":  # a leading ] is a literal
+                i += 1
+            continue
+        elif c == "(":
+            stack.append(False)
+        elif c == ")" and stack:
+            inner = stack.pop()
+            quantified = p[i + 1:i + 2] in ("+", "*", "{")
+            if inner and quantified:
+                return True
+            if stack and (inner or quantified):
+                stack[-1] = True
+        elif c in "+*" and stack:
+            stack[-1] = True
+        i += 1
+    return False
+
+
 def check_recipe(r) -> None:
     """Raise VerdictError unless r is a well-formed recipe."""
     _need(isinstance(r, dict), "recipe is not an object")
@@ -92,6 +131,8 @@ def check_recipe(r) -> None:
             re.compile(s)
         except re.error:
             raise VerdictError("skip_rows_matching holds an invalid pattern") from None
+        _need(len(s) <= _MAX_PATTERN and not _nested_quantifier(s),
+              "skip_rows_matching holds a pattern that is too long or has a nested quantifier")
     cols = r.get("columns")
     _need(isinstance(cols, dict), "columns is missing")
     _need(cols or layout in ("table", "delimited"), "columns is empty")  # ranges come only from the reviewer
@@ -235,8 +276,9 @@ def _map_columns(layout, cols, header_recs, notes):
 
 
 def _find_header(h: str, keys, htext):
-    flat = lambda t: re.sub(r"\r\n|\r|\n", "\\\\n", t).strip()  # noqa: E731 - preview shows newlines as \n
-    for norm in (str.strip, flat, normalise_header):
+    def as_previewed(t):  # the preview shows every line break as \n
+        return flat(t).strip()
+    for norm in (str.strip, as_previewed, normalise_header):
         want = norm(h)
         hit = next((k for k in keys if want and norm(htext[k]) == want), None)
         if hit is not None:

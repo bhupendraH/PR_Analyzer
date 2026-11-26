@@ -5,14 +5,16 @@ from pr_intake.recipe import Table
 
 CELL_CAP = 2000
 
+_VERB = r"\b(delete|send|upload|run|execute|curl|wget|fetch|download|visit|click)\b"
+# A link alone is normal (a vendor's web site): it counts only with an instruction verb within 40 characters.
 _PATTERNS = [re.compile(p, re.IGNORECASE) for p in (
     r"ignore (all |any |the )?(previous |prior |above )?instructions",
     r"disregard",
     r"system prompt",
     r"you are (an? )?(ai|assistant|model|claude)",
-    r"\bassistant\b",
-    r"\b(delete|send|upload|run|execute|curl|wget)\b.{0,40}\b(file|files|data|command|script|http)",
-    r"https?://",
+    _VERB + r".{0,40}\b(file|files|data|command|script|http)\b",
+    _VERB + r".{0,40}https?://",
+    r"https?://.{0,40}" + _VERB,
 )]
 
 

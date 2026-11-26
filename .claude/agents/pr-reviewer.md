@@ -58,7 +58,7 @@ Often confused with a PR (answer `is_pr: false`):
 - `delimiter`: delimited only, e.g. `","` or `"\t"`.
 - `header_rows`: the row (xlsx) or line (text/PDF) numbers of the header, as printed in the preview (`R<n>` / `L<n>`).
 - `data_rows`: `{"first": n, "last": n}` using the same numbers. If the preview was truncated (first 60 / last 20 rows; first 15 / last 5 per sheet when the workbook has more than 3 sheets), `last` is the number in the preview's `ROWS: n` line (the last row/line number of the sheet/file).
-- `skip_rows_matching`: list of regular expressions; a data row/line whose text matches one is skipped (page headers, sub totals, blank separators). Use it only for layout noise (page headers, column-header repeats, sub totals, separators, blank lines); never to drop documents of any type — journals, credit notes and reversals are PR data and must stay. Use `[]` if none.
+- `skip_rows_matching`: list of regular expressions, each at most 200 characters, never with a quantified group that holds `+` or `*` (such as `(a+)+`); a data row/line whose text matches one is skipped (page headers, sub totals, blank separators). Use it only for layout noise (page headers, column-header repeats, sub totals, separators, blank lines); never to drop documents of any type — journals, credit notes and reversals are PR data and must stay. Use `[]` if none.
 - `columns`: maps a field name to where it is found:
   - table/delimited: `{"header": "<header text exactly as printed>"}`
   - fixed_width: `{"chars_from": a, "chars_to": b}`, 1-based, inclusive, counted from the first character after `| ` on the `L<nnnn> | ` line (matching the ruler)

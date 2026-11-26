@@ -193,9 +193,7 @@ def _notes(prep_notes: list[str], states: list[_FileState], month_notes: list[st
             pages = ", ".join(str(p) for p in st.result.ocr_pages)
             notes.append(f"{st.name}: scanned page(s) {pages} read by OCR")
     notes.extend(month_notes)
-    for st in states:
-        if st.result.reviewer_reason:
-            notes.append(f"{st.name}: reviewer said: {st.result.reviewer_reason}")
+    # The reviewer's own reason stays in files[].reviewer_reason only: notes reach run_status.json in Blob.
     for st in states:
         if st.dropped_where:
             notes.append(f"{st.name}: {st.dropped_where} reviewer instruction-like location(s) dropped "

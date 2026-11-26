@@ -75,6 +75,25 @@ def _too_many(file: str) -> Rejection:
     return Rejection("TOO_LARGE", file, f"more than {limits.MAX_FILES} files")
 
 
+def _folder_index(names) -> dict[tuple[int, str], int]:
+    """(parent folder id, name) -> folder id for every folder that holds an entry; linear in the names' length."""
+    ids: dict[tuple[int, str], int] = {}
+    for n in names:
+        parent = 0
+        for part in n.split("/")[:-1]:
+            parent = ids.setdefault((parent, part), len(ids) + 1)
+    return ids
+
+
+def _is_folder(ids: dict[tuple[int, str], int], name: str) -> bool:
+    parent = 0
+    for part in name.split("/"):
+        parent = ids.get((parent, part))
+        if parent is None:
+            return False
+    return True
+
+
 class _Collector:
     def __init__(self, out_dir: Path):
         self.out_dir = Path(out_dir)
@@ -147,10 +166,13 @@ class _Collector:
         except _ZIP_ERRORS:
             raise rej("cannot be opened") from None
         with zf:
-            all_names = [i.filename.rstrip("/").casefold() for i in zf.infolist()]
+            infos = zf.infolist()
+            if len(infos) > limits.MAX_ZIP_ENTRIES:
+                raise _too_many(display)
+            folders = _folder_index(zi.filename.rstrip("/").casefold() for zi in infos)
             seen = set()
             kept = []
-            for zi in zf.infolist():
+            for zi in infos:
                 if zi.filename.endswith("/"):
                     continue
                 name = zi.filename
@@ -159,8 +181,7 @@ class _Collector:
                         or name.casefold() in seen):
                     raise rej("unsafe paths")
                 seen.add(name.casefold())
-                folded = name.casefold() + "/"
-                if any(o.startswith(folded) for o in all_names):  # file/folder clash
+                if _is_folder(folders, name.casefold()):  # file/folder clash
                     raise rej("unsafe paths")
                 if zi.flag_bits & 0x1:
                     raise rej("password protected")

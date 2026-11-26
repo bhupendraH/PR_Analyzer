@@ -152,8 +152,18 @@ def _col_letter(i: int) -> str:
     return s
 
 
-def _flat(s: str) -> str:
-    return re.sub(r"\r\n|\r|\n", "\\n", s)
+# Every separator str.splitlines() knows, so no file text can start a new preview line.
+_LINE_BREAKS = re.compile("\r\n|[\n\r\x0b\x0c\x1c\x1d\x1e\x85  ]")
+
+
+def flat(s: str) -> str:
+    """Cell, name or word text for a preview line: each line break shown as the two characters \\n."""
+    return _LINE_BREAKS.sub(lambda _: "\\n", s)
+
+
+def _flat_line(s: str) -> str:
+    """A text-file line: each line break becomes one space, so character positions stay the same."""
+    return _LINE_BREAKS.sub(" ", s)
 
 
 def _window(total: int, head: int | None = None, tail: int | None = None) -> tuple[list[int], int]:
@@ -176,20 +186,20 @@ def _emit(out: list[str], total: int, fmt, head: int | None = None, tail: int | 
 
 def render_preview(extracted: dict, source: str) -> str:
     kind = extracted["kind"]
-    out = [f"FILE: {source} | KIND: {kind}"]
+    out = [f"FILE: {flat(source)} | KIND: {kind}"]
     if kind == "xlsx":
         sheets = extracted["sheets"]
-        out.append(f"SHEETS: {len(sheets)} | " + ", ".join(_flat(sh["name"]) for sh in sheets))
+        out.append(f"SHEETS: {len(sheets)} | " + ", ".join(flat(sh["name"]) for sh in sheets))
         many = len(sheets) > limits.PREVIEW_MANY_SHEETS
         head, tail = (limits.PREVIEW_HEAD_MANY, limits.PREVIEW_TAIL_MANY) if many else (None, None)
         for sh in sheets:
             rows = sh["rows"]
             total = len(rows)
             width = max([len(r) for r in rows] + [1])
-            out.append(f"SHEET: {_flat(sh['name'])}")
+            out.append(f"SHEET: {flat(sh['name'])}")
             out.append("COLS | " + " | ".join(_col_letter(i) for i in range(width)))
             _emit(out, total, lambda o, i, rows=rows: o.append(
-                f"R{i + 1} | " + " | ".join(_flat(c) for c in rows[i])), head, tail)
+                f"R{i + 1} | " + " | ".join(flat(c) for c in rows[i])), head, tail)
             out.append(f"ROWS: {total}")
     elif kind == "text":
         lines = extracted["lines"]
@@ -205,7 +215,7 @@ def render_preview(extracted: dict, source: str) -> str:
             if i % 50 == 0 or not state["last"]:
                 o.append(ruler)
                 state["last"] = True
-            o.append(f"L{i + 1:0{w}d} | {lines[i]}")
+            o.append(f"L{i + 1:0{w}d} | {_flat_line(lines[i])}")
         if not total:
             out.append(ruler)
         _emit(out, total, fmt)
@@ -217,7 +227,7 @@ def render_preview(extracted: dict, source: str) -> str:
 
         def fmt(o, i):
             ln = lines[i]
-            words = " ".join(f"{x['text']}@{round(x['x0'])}-{round(x['x1'])}" for x in ln["words"])
+            words = " ".join(f"{flat(x['text'])}@{round(x['x0'])}-{round(x['x1'])}" for x in ln["words"])
             o.append(f"L{ln['n']:0{w}d} p{ln['page']} | {words}")
         _emit(out, total, fmt)
         out.append(f"ROWS: {total}")

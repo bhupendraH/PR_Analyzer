@@ -134,8 +134,7 @@ A `config.json` in `CONFIG` is ignored (record the run note "config.json ignored
 
 **Run notes**: the workbook has no Assumptions sheet. Wherever this file or
 `instructions.txt` says to record or note something (an assumption, a fallback,
-a setting not set or overridden, the column mapping, files used and skipped,
-checks skipped), keep it as a run note. Run notes go only into
+the fields present, the files used, checks skipped), keep it as a run note. Run notes go only into
 `run_status.json` (section 5 or 7), never into the workbook.
 
 Rules:
@@ -164,7 +163,8 @@ that every run behaves the same way:
 - Your script (not you) reads `work/intake/manifest.json`: if the entity
   columns are absent, `files[].entity` (`entity_name`, `entity_gstin`, read
   from a report header) feeds Step 1.6; `files[].instruction_like` feeds
-  ANM-11. Each entry is `<source_location>, <field>`: the script finds that
+  ANM-11. Each entry is `<source_location>, <field>`: the script splits it at
+  the last `, ` (`rsplit(", ", 1)`; sheet names can contain `, `), finds that
   file's CSV row whose `source_location` matches and takes column `<field>`,
   first 80 characters, as the text part. An entry starting `reviewer: ` is
   written as "Instruction-like text in <file> at <location> (reported by
@@ -210,8 +210,8 @@ python3 blob.py status 'T' 'A' 'X' done "<DONE message>" "<counts line>" "<spend
 
 Add each run note as one more `"NOTE …"` argument after the spend line.
 `run_status.json` keeps at most 20 messages of 1000 characters each, so that
-leaves 17 notes: group related notes into one message (e.g. all files used and
-skipped in one, the column mapping in one, all skipped checks in one), keep
+leaves 17 notes: group related notes into one message (e.g. all files used in
+one, the fields present in one, all skipped checks in one), keep
 each under 1000 characters, and put the most important first.
 
 `put` accepts only an `.xlsx` name of letters, digits, spaces and `. _ ( ) -`.
@@ -250,7 +250,7 @@ Call `status` **exactly once per run**, whatever it prints. Its output is
 
 Every run ends with exactly one outcome. The outcome's **result message** is
 the first `status` message (the backend's fail reason) and line 1 of the final
-reply. Use the wording below exactly, filling only the placeholders:
+reply (except for an intake stop, whose final reply is fixed: see below). Use the wording below exactly, filling only the placeholders:
 
 - `{period}` = `from_month` and `to_month` from `input.json` as 3-letter
   English month and year, `Feb 2025 to Apr 2025`; just `Feb 2025` if both are
