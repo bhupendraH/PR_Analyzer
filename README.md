@@ -9,4 +9,6 @@ transaction-level exceptions.
 - `RUNNER.md`: how a cloud run works
 - `SETUP.md`: Blob layout, cloud environment, saved prompt, fire call
 - `blob.py`: Blob I/O, limited to one run folder
-- `template/`: output template generator and example config
+- `intake.py`, `pr_intake/`: PR intake (xlsx, pdf, txt, csv, zip; OCR for scans), the only step that reads the PR files
+- `.claude/agents/pr-reviewer.md`: reviewer agent used by intake, one file at a time
+- `template/`: output template generator

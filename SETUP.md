@@ -10,9 +10,10 @@ workbook. Claude does the analysis itself:
 | `instructions.txt` | **what** to do: the analysis rules and their defaults (edit this to change behaviour) |
 | `RUNNER.md` | **how** a cloud run works: download, find files, deliver, report |
 | `blob.py` | the only way the run touches Blob; reads stay in the run folder, writes stay in its output folder |
-| `setup.sh` | installs Python packages and (best effort) LibreOffice |
+| `intake.py`, `pr_intake/` | PR intake: reads the uploaded PR files, builds the tables the analysis uses, rejects files that are not a Purchase Register |
+| `.claude/agents/pr-reviewer.md` | the reviewer agent that judges one extracted file at a time (used only by intake) |
+| `setup.sh` | installs Python packages and (best effort) LibreOffice and tesseract-ocr |
 | `template/make_template.py` | builds `template/Outputformat.xlsx`, the output template |
-| `template/config.example.json` | starting point for a transaction's `config.json` |
 
 The task clones `main`: push changes to these files before firing.
 
@@ -25,10 +26,9 @@ are matched ignoring case.
 
 ```
 <tenant_id>/Purchase Register Analyzer/<transaction_id>/
-  config/config.json         settings overrides (often just approval_limit; {} is valid)
-  config/Outputformat.xlsx   output template (copy of template/Outputformat.xlsx)
+  config/Outputformat.xlsx   output template (copy of template/Outputformat.xlsx); config/ holds nothing else
   input/input.json           the period: {"from_month": "MMYYYY", "to_month": "MMYYYY"}
-  input/PR/*.xlsx            Purchase Register files, one per month
+  input/PR/                  Purchase Register files: xlsx, pdf, txt, csv or zip of these; a month may span files
   output/                    written by the run
 ```
 
@@ -38,21 +38,23 @@ The run writes `output/PR_Analysis_<from>_<to>.xlsx` (e.g.
 run notes), into an existing `Output/` folder if there is one. A re-run
 overwrites them.
 
-### config.json
+### PR intake
 
-Every setting has a default in `instructions.txt` (SETTINGS). `config.json`
-only overrides them. Minimal file:
+Before the analysis, `intake.py` checks and converts everything in `input/PR/`
+(`prepare`, then one `pr-reviewer` call per file, then `verify`). The analysis
+reads only the tables it makes, never the raw files.
 
-```json
-{
-  "approval_limit": "<APPROVAL_LIMIT>"
-}
-```
-
-A value in angle brackets is "not set": the default applies, and the
-split-invoice check (SPL-1) is skipped until `approval_limit` holds a number.
-Common overrides: `"approval_limit": 100000`, `"weekend_check": false`,
-`"severity_overrides": {"GST-7": "Info"}`, `"disabled_rules": ["RND-1"]`.
+- Accepted: `.xlsx`, `.pdf` (text or scanned; scans are read by OCR),
+  `.txt`, `.csv` and `.zip` of these. Months are assigned per row, so a month
+  may span several files and one file may hold several months. Files outside
+  the period are ignored; the newest file per month wins.
+- Limits: at most 60 files and 50 MB in total; at most 200 scanned pages.
+  Files that are not a Purchase Register (sales register, ledger, GSTR-2A/2B,
+  bank statement, invoice) stop the run with a message naming the file.
+- A bad file stops the whole run: it is never skipped silently.
+- `tesseract-ocr` is installed best effort by `setup.sh`; without it a
+  scanned PDF stops the run with `OCR_UNAVAILABLE`.
+- `run_status.json` holds the intake notes (`intake_notes`) and `credit_used`.
 
 ### Changing the template
 
@@ -65,7 +67,7 @@ Edit `template/make_template.py`, run it, and upload the new
 - Network access: allowed domains `login.microsoftonline.com`,
   `botiqblobuat.blob.core.windows.net` and
   `bmagentsuat-agaca0dyaxc3d0ds.centralindia-01.azurewebsites.net` (the
-  backend API), plus "Allow package managers" (pip and apt for LibreOffice).
+  backend API), plus "Allow package managers" (pip and apt for LibreOffice and tesseract-ocr).
 - Environment variables (anyone using the environment can read them):
 
   | Variable | Value |
@@ -120,8 +122,8 @@ Content-Type: application/json
 - If the routine key has been shared anywhere (chat, screenshots, commits), ask
   the backend team for a new one.
 
-`.claude/settings.json` pre-approves `python3 blob.py pull|put|status` and
-`bash setup.sh`, so the unattended run never waits on a permission prompt.
+`.claude/settings.json` pre-approves `python3 blob.py pull|put|status`,
+`python3 intake.py prepare|verify` and `bash setup.sh`, so the unattended run never waits on a permission prompt.
 
 | `status` line ends with | Likely cause |
 |---|---|
@@ -171,11 +173,18 @@ For failures, the outcome code below is on a `Detail:` line (2nd message in
 |---|---|
 | `DONE <file>` | workbook uploaded, checks passed |
 | `CHECK_FAILED <file>` | workbook uploaded (name ends `_CHECK_FAILED`), a verification failed |
-| `NOTHING_TO_DO <reason>` | no PR files for the month range in input.json |
+| `NOTHING_TO_DO <reason>` | no PR files, or none for the month range in input.json |
+| `REJECTED NOT_A_PR …` | a file is not a Purchase Register (named in the message) |
+| `REJECTED UNSUPPORTED_FILE …` | a file type that cannot be read |
+| `REJECTED ZIP_REJECTED …` | a zip that is nested, password protected, too large unpacked, unsafe or damaged |
+| `REJECTED TOO_LARGE …` | more than 60 files or more than 50 MB in total |
+| `REJECTED SCAN_UNREADABLE …` | a scanned page could not be read reliably |
+| `REJECTED OCR_UNAVAILABLE …` | scanned PDF found but tesseract is not installed |
+| `REJECTED TOO_MANY_SCAN_PAGES …` | more than 200 scanned pages |
 | `NOT_FOUND <tenant>/<agent>/<txn>` | run folder empty or missing (no `run_status.json` written; backend still gets `FAIL`) |
 | `UNSUPPORTED_AGENT <agent_name>` | only `Purchase Register Analyzer` is handled; Blob not touched; backend still gets `FAIL` |
 | `INVALID_TRANSACTION` | payload is not three IDs of letters, digits, `-`, `_` (the agent name may also have single spaces between words); nothing is called |
-| `ERROR <reason>` | config, input.json or template missing or invalid, PR columns not found, Azure error (type/status/code only) |
+| `ERROR <reason>` | input.json or template missing or invalid, PR columns not found, intake error, Azure error (type/status/code only) |
 
 ## Fire call (Postman)
 
@@ -210,9 +219,9 @@ python -m venv myenv
 .\myenv\Scripts\python.exe -m pip install -r requirements.txt pytest
 ```
 
-`tests/test_blob.py` (kept local, not pushed) covers `blob.py`: the API body,
-the success rule, retries, no redirects, and that no key or response text is
-printed. Run it with `.\myenv\Scripts\python.exe -m pytest tests -q`.
+`tests/` (kept local, not pushed) covers `blob.py` (the API body, the success
+rule, retries, no redirects, that no key or response text is printed) and
+`intake.py`. Run it with `.\myenv\Scripts\python.exe -m pytest tests -q`.
 
 The analysis itself is defined by `instructions.txt` and has no automated
 tests: review a run's workbook before relying on a changed instruction.
