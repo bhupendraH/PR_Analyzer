@@ -19,6 +19,10 @@ class OcrUnavailable(Exception):
         self.page = page
 
 
+class TooManyOcrPages(Exception):
+    """A single file needs more OCR pages than limits.MAX_OCR_PAGES."""
+
+
 def _cell(v: Any) -> str:
     if v is None:
         return ""
@@ -71,7 +75,7 @@ def _ocr_words(page: Any, page_no: int, ocr: Any) -> list[dict]:
 
     Returns word dicts with keys x0, x1, top, text, conf.
     """
-    if ocr is None:
+    if ocr is None or not ocr.available():
         raise OcrUnavailable(page_no)
     return ocr.page_words(page, page_no)
 
@@ -88,6 +92,8 @@ def _extract_pdf(path: str, ocr: Any) -> dict:
                 chars = sum(len(w["text"]) for w in words)
                 if chars < limits.SCAN_TEXT_MIN_CHARS and page.images:
                     ocr_pages.append(pno)
+                    if len(ocr_pages) > limits.MAX_OCR_PAGES:
+                        raise TooManyOcrPages()
                     words = _ocr_words(page, pno, ocr)
                 groups: dict[int, list[dict]] = {}
                 for w in words:
@@ -100,7 +106,7 @@ def _extract_pdf(path: str, ocr: Any) -> dict:
                         "words": [{"x0": float(w["x0"]), "x1": float(w["x1"]), "text": w["text"],
                                    "conf": w.get("conf")} for w in ws],
                     })
-    except OcrUnavailable:
+    except (OcrUnavailable, TooManyOcrPages):
         raise
     except Exception:
         raise ExtractError("cannot be read") from None
