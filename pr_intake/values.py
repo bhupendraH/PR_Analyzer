@@ -38,7 +38,7 @@ def parse_amount(s):
 
 _TIME = re.compile(r"[ T]\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?$")
 _SERIAL = re.compile(r"^\d{5}(?:\.\d+)?$")
-_FORMATS = ("%d-%b-%Y", "%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d", "%d.%m.%Y", "%d-%b-%y")
+_FORMATS = ("%d-%b-%Y", "%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d", "%d.%m.%Y", "%d-%b-%y", "%d/%m/%y", "%d.%m.%y")
 
 
 def parse_date(s):

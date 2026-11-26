@@ -9,13 +9,13 @@ from collections import OrderedDict
 from dataclasses import dataclass
 
 from pr_intake import limits
-from pr_intake.fields import AMOUNT_FIELDS
 from pr_intake.gstin import is_valid_gstin
 from pr_intake.recipe import Table
 from pr_intake.values import parse_amount, parse_date
 
 _CUSTOMER = re.compile(r"customer|buyer|client|billto|shipto")
 _TAX = ("cgst", "sgst", "igst")
+_MONEY = ("spend_value", "taxable", *_TAX, "invoice_total")  # not quantity / unit_rate
 
 
 @dataclass
@@ -112,7 +112,7 @@ def run_checks(t: Table) -> list[Check]:
     dv = [r["invoice_date"].strip() for r in t.rows if "invoice_date" in m and r.get("invoice_date", "").strip()]
     add("dates", _share_ok(sum(parse_date(v) is not None for v in dv), len(dv), limits.DATE_MIN), "dates_invalid")
 
-    av = [r[f] for r in t.rows for f in AMOUNT_FIELDS if f in m and r.get(f, "").strip()]
+    av = [r[f] for r in t.rows for f in _MONEY if f in m and r.get(f, "").strip()]
     add("amounts", _share_ok(sum(_amt(v) is not None for v in av), len(av), limits.AMOUNT_MIN), "amounts_invalid")
 
     arith_possible = {"taxable", "invoice_total"} <= m and bool(m & set(_TAX))
@@ -132,8 +132,15 @@ def run_checks(t: Table) -> list[Check]:
             incl = bool(lines) and sum(lines) / len(lines) >= limits.SPEND_TAX_INCL_MAX
         add("spend_not_tax_inclusive", not (same or incl), "spend_includes_tax")
 
+    add("tax_evidence", bool(m & {"taxable", *_TAX}), "no_tax_columns")
+
     sides = [f for f in ("supplier_name", "supplier_gstin") if f in m]
-    add("purchase_side", not any(_CUSTOMER.search(_header_text(t.mapping[f])) for f in sides), "customer_side")
+    bad_side = any(_CUSTOMER.search(_header_text(t.mapping[f])) for f in sides)
+    bad_side = bad_side or any("sale" in _header_text(t.mapping[f]) for f in ("doc_ref", "transaction_type") if f in m)
+    if "transaction_type" in m:
+        tt = [_header_text(r.get("transaction_type", "")) for r in t.rows if r.get("transaction_type", "").strip()]
+        bad_side = bad_side or (bool(tt) and sum("sale" in v for v in tt) / len(tt) >= 0.5)
+    add("purchase_side", not bad_side, "customer_side")
 
     if any(t.ocr_rows):
         bad = any(v < limits.OCR_MIN_MEAN_CONF for k, v in t.ocr_conf.items() if k.startswith("page:")) or \
