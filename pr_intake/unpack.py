@@ -3,6 +3,7 @@ import calendar
 import datetime
 import hashlib
 import io
+import lzma
 import os
 import zipfile
 import zlib
@@ -15,7 +16,7 @@ from pr_intake.filetype import sniff
 _JUNK_NAMES = {".ds_store", "thumbs.db"}
 _EXT_KIND = {".xlsx": "xlsx", ".pdf": "pdf", ".txt": "text", ".csv": "text", ".zip": "zip"}
 _CHUNK = 64 * 1024
-_ZIP_ERRORS = (zipfile.BadZipFile, zlib.error, EOFError, NotImplementedError, ValueError, OSError)
+_ZIP_ERRORS = (zipfile.BadZipFile, zlib.error, lzma.LZMAError, EOFError, NotImplementedError, ValueError, OSError)
 
 
 @dataclass
