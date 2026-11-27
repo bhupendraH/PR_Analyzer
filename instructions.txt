@@ -491,8 +491,13 @@ STEP 7 - BUILD THE WORKBOOK
    The client's sample-row and fixed-form formulas are used as written:
    when the client added or removed a column in Excel, Excel already moved
    their references. A template formula that contains #REF! (it pointed at
-   a column the client deleted) is written as an empty cell; one run note
-   lists those cells, and they do not count as formula errors in 6. A
+   a column the client deleted) is replaced by the value this routine
+   computes for that cell in Python (the cell's standard column or Summary/
+   Concentration label says what it holds: the same figure the standard
+   formula would give), written as a plain number or text; if the cell's
+   meaning cannot be told, it is left empty. One run note lists the cells
+   written as values and the cells left empty; neither counts as a formula
+   error in 6, and both still feed the checks in Step 8. A
    column header the instructions name (criteria columns, the Share %
    column, the Monthly Trend Flag) is always found by its header in the
    client's template. Template differences never make the run
@@ -525,9 +530,9 @@ STEP 7 - BUILD THE WORKBOOK
    formula with "Skipped" or "Disabled".
 5. Concentration: as Step 4.
 6. Set calculation to full recalculation on load, recalculate, and confirm ZERO
-   formula errors (cells left empty under 1a excepted) and Summary control
-   check (B52) = 0. B52 is checked only if the client's template holds a
-   formula there without #REF!; otherwise skip it (run note).
+   formula errors and Summary control check (B52) = 0. If the client's
+   template had #REF! in B52, check the control in Python instead (run
+   note).
 7. Save as PR_Analysis_{FROM}_{TO}.xlsx ({FROM}/{TO} = from_month/to_month).
 
 CHECK DEPENDENCIES (field missing -> these are skipped, with a run note)
@@ -563,8 +568,8 @@ STEP 8 - VERIFY BEFORE FINISHING
  - Spot-check 3 exceptions of different rules against the PR lines: the
    reason's values are right.
  - A check above that needs a column the client's template removed, or a
-   cell left empty under Step 7.1a, is skipped; one run note lists the
-   skipped checks. Run every check you can on what the workbook holds, and
+   cell left empty under Step 7.1a, is checked on the Python figures
+   instead; if that is impossible it is skipped. One run note lists them. Run every check you can on what the workbook holds, and
    check the totals in Python regardless of the layout.
 
 FINAL REPLY (maximum 6 lines)
