@@ -201,8 +201,8 @@ All figures from Purchase and Credit note documents (lines), PR Period = month.
    distinct PR Periods. Largest Document = the largest document spend.
    ABC Class: A while cumulative share before the supplier is below the first
    abc cut-off, B while below the second, else C.
-3. Category Spend: two blocks, "Account" first (if the account column exists),
-   then "SAC/HSN" (if it exists). Within a block sort by spend descending, then
+3. Category Spend: two blocks, "Account" first (if the account field exists
+   in the PR tables), then "SAC/HSN" (if the hsn_sac field exists). Within a block sort by spend descending, then
    category ascending. Suppliers = distinct Supplier Keys. Top Supplier = the
    key with the most spend in that category (ties: Supplier Key ascending),
    shown by name; Top Supplier Share % = its spend / category spend (blank if
@@ -475,33 +475,59 @@ STEP 7 - BUILD THE WORKBOOK
    Category Spend | Tax Profile | Anomalies | Exceptions | PR Data | PR Lines.
    Do not add or remove sheets (there is no Assumptions sheet). A table sheet
    missing from the client's template is skipped (run note).
-1a. Template columns. For each table sheet read row 4 of the client's
-   template and build a header map. Each standard column is written to the
-   column found by its header; a standard column the template does not have
-   is not written. A column whose header is not a standard one (an added
-   column) is filled by the first rule that applies:
-   a. the template's sample row (row 5) has a formula in it: write that
-      formula on every data row, row numbers changed to the row;
+1a. Template columns. The client's template keeps the standard layout
+   except for columns on the table sheets: the header row is row 4, the
+   sample row is row 5, sheet names are unchanged, and Summary and
+   Concentration are the standard fixed forms. If a table sheet's row 4
+   holds no standard header at all, write the standard headers into row 4
+   of that sheet and build it in the standard layout (run note).
+   For each table sheet read row 4 and build a header map. Each standard
+   column is written to the column found by its header (if a header appears
+   twice, the first is the standard column and the later ones are added
+   columns; a blank header is named by its column letter in notes). A
+   standard column the template does not have is not written. A renamed
+   standard column counts as that standard column removed plus one added
+   column. A column whose header is not a standard one (an added column) is
+   filled by the first rule that applies:
+   a. the template's sample cell (row 5) holds a formula or a value: write
+      that formula on every data row (row numbers changed to the row), or
+      that value on every data row;
    b. its header matches a PR field header in pr_intake/fields.py (default
-      or alternative, normalised), and the sheet is PR Data (value from the
-      document's first line), PR Lines (the line) or Exceptions (the
-      document's first line): write that field's value;
-   c. otherwise the column is left empty; one run note per sheet lists the
-      columns left empty.
-   The client's sample-row and fixed-form formulas are used as written:
-   when the client added or removed a column in Excel, Excel already moved
-   their references. A template formula that contains #REF! (it pointed at
-   a column the client deleted) is replaced by the value this routine
-   computes for that cell in Python (the cell's standard column or Summary/
-   Concentration label says what it holds: the same figure the standard
-   formula would give), written as a plain number or text; if the cell's
-   meaning cannot be told, it is left empty. One run note lists the cells
-   written as values and the cells left empty; neither counts as a formula
-   error in 6, and both still feed the checks in Step 8. A
-   column header the instructions name (criteria columns, the Share %
-   column, the Monthly Trend Flag) is always found by its header in the
-   client's template. Template differences never make the run
-   CHECK_FAILED by themselves.
+      or alternative, normalised), and the sheet is PR Data, PR Lines or
+      Exceptions: write that field's value as cleaned in Step 2 (trimmed
+      text, dates as dates, amounts as numbers). On PR Lines it is the
+      line's value. On PR Data and Exceptions an amount field is the
+      document's sum as in Step 2.4 with the credit-note sign of Step 2.5;
+      invoice_total and all other fields come from the document's first
+      line;
+   c. otherwise the column is left empty.
+   The client's sample-row and fixed-form formulas are used as written
+   (when the client added or removed a column in Excel, Excel already moved
+   their references), except for the substitutions Steps 4 and 7.3 name.
+   A formula in a standard column, or in a Summary or Concentration cell,
+   is replaced by the value this routine computes for that cell in Python
+   (the same figure the standard formula would give, written as a plain
+   number or text) when any of these holds:
+   - it contains #REF! (it pointed at a column the client deleted);
+   - it reads a column on a table sheet whose row-4 header is not the
+     standard header the standard formula reads there (the column was
+     renamed or removed);
+   - a formula this routine builds (a criteria column per Step 3.4 or per
+     Category Spend block, the Share % range, the Monthly Trend Flag) needs
+     a column the client's template does not have.
+   A cell of an added column is never replaced: under rule a, a formula
+   that contains #REF! is written as an empty cell. A template difference
+   never removes a Category Spend block or a Tax Profile section; only a
+   missing PR field does (CHECK DEPENDENCIES). Columns the instructions
+   name are always found by their header in the client's template.
+   Template run notes: at most two messages in total, grouped by sheet with
+   column ranges (e.g. "Monthly Trend C5:J7 written as values (template
+   formulas pointed at a deleted column)"; "Supplier Spend: Remarks left
+   empty"). Cells written as values or left empty under 1a are not formula
+   errors in 6 and still feed the checks in Step 8. Template differences
+   handled by these rules never make the run CHECK_FAILED by themselves; a
+   Step 7.6 or Step 8 check that still fails after them is CHECK_FAILED as
+   usual.
 2. Every sheet: cell A2 = "<entity name> | GSTIN <entity GSTIN> | <Mon-YYYY>
    to <Mon-YYYY>".
 3. Table sheets (Monthly Trend, Supplier Spend, Category Spend, Tax Profile,
@@ -518,7 +544,8 @@ STEP 7 - BUILD THE WORKBOOK
    integer n; otherwise write the source_location text. Monthly Trend and Supplier Spend
    get a Total row directly below the last data row, styled like the sample
    Total row, its SUMs covering row 5 to the last data row. Set the filter to
-   A4 down to the last data row. Severity cells get the fill of their
+   A4 to the template's last header column, down to the last data row.
+   Severity cells get the fill of their
    severity: High FFC7CE, Medium FFEB9C, Low DDEBF7, Info EDEDED.
    Monthly Trend Flag formula: use mom_change_alert_percent / 100 in place
    of 0.5.
@@ -530,9 +557,7 @@ STEP 7 - BUILD THE WORKBOOK
    formula with "Skipped" or "Disabled".
 5. Concentration: as Step 4.
 6. Set calculation to full recalculation on load, recalculate, and confirm ZERO
-   formula errors and Summary control check (B52) = 0. If the client's
-   template had #REF! in B52, check the control in Python instead (run
-   note).
+   formula errors and Summary control check (B52) = 0.
 7. Save as PR_Analysis_{FROM}_{TO}.xlsx ({FROM}/{TO} = from_month/to_month).
 
 CHECK DEPENDENCIES (field missing -> these are skipped, with a run note)
@@ -567,10 +592,14 @@ STEP 8 - VERIFY BEFORE FINISHING
  - Zero formula errors after recalculation.
  - Spot-check 3 exceptions of different rules against the PR lines: the
    reason's values are right.
+ - Total Tax and Tax columns equal CGST + SGST + IGST on every row (a
+   client column inserted inside a summed range must not be counted).
  - A check above that needs a column the client's template removed, or a
    cell left empty under Step 7.1a, is checked on the Python figures
-   instead; if that is impossible it is skipped. One run note lists them. Run every check you can on what the workbook holds, and
-   check the totals in Python regardless of the layout.
+   instead (the run note says the check was not independent); if that is
+   impossible it is skipped. One run note lists them. Run every check you
+   can on what the workbook holds, and check the totals in Python
+   regardless of the layout.
 
 FINAL REPLY (maximum 6 lines)
  - Entity name and GSTIN, period covered, months missing
