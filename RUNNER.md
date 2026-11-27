@@ -147,6 +147,9 @@ Rules:
 - No PR files, or none for the range: decided by section 2b (`NOTHING_TO_DO …`).
 - No template found that way (or several `.xlsx` in `CONFIG` and none named
   `Outputformat.xlsx`) → `ERROR template not found`.
+- The template is the client's own and may differ from the standard one by
+  added or removed columns on the table sheets. Never stop because it
+  differs: `ERROR template not found` is only for a missing template.
 
 ## 4. Analyse
 
@@ -177,7 +180,10 @@ that every run behaves the same way:
 - Quartiles = `pandas.Series.quantile` (default linear interpolation).
 - Date gaps are calendar days. Weekdays from Python `date.weekday()`
   (5 = Saturday, 6 = Sunday).
-- Build the workbook from the template with openpyxl. To copy a sample-row
+- Build the workbook from the client's template with openpyxl, following
+  `instructions.txt` Step 7 (columns found by their header, added and removed
+  columns, `#REF!` cells). Template differences end in run notes, never in
+  `_CHECK_FAILED` by themselves. To copy a sample-row
   formula to another row use `openpyxl.formula.translate.Translator`.
   Set `wb.calculation.fullCalcOnLoad = True` and save as
   `work/out/PR_Analysis_<from_month>_<to_month>.xlsx`.
