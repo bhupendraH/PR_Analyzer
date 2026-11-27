@@ -210,7 +210,7 @@ python3 blob.py status 'T' 'A' 'X' done "<DONE message>" "<counts line>" "<spend
 ```
 
 - DONE message: the `DONE` result message from section 6, e.g.
-  `Purchase Register analysis completed for Feb 2025 to Apr 2025. Report: PR_Analysis_022025_042025.xlsx`
+  `Your Purchase Register report for Feb 2025 to Apr 2025 is ready: PR_Analysis_022025_042025.xlsx`
 
 - counts line: `Documents <n> | Suppliers <n> | Exceptions H <n> / M <n> / L <n> / Info <n>`
 - spend line: `Spend Rs <total> | Top supplier <p>% | Top 5 <p>% | HHI <n>`
@@ -268,29 +268,29 @@ reply (except for an intake stop, whose final reply is fixed: see below). Use th
 
 | Outcome (old code) | Result message |
 |---|---|
-| `DONE <file>`: workbook uploaded, all checks passed | Purchase Register analysis completed for {period}. Report: {file} |
-| `CHECK_FAILED <file>`: workbook uploaded, a check failed | Purchase Register analysis completed for {period}, but some final checks did not pass. Please review the report before using it: {file} |
-| `NOTHING_TO_DO no PR files for <from>-<to>` (from `verify`) | No Purchase Register files were found for {period}. Please upload the files and run again. |
-| `NOTHING_TO_DO no PR files` (from `prepare`) | No Purchase Register files were found. Please upload the files and run again. |
-| `REJECTED NOT_A_PR …` | The PR folder contains files that do not look like a Purchase Register: {file} ({why}){and_more}. Please remove or replace them and run again. |
-| `REJECTED REVIEW_FAILED …` | The PR files could not be checked because of a system problem. Please try again later or contact support. |
-| `REJECTED UNSUPPORTED_FILE …` | The PR folder contains a file type that cannot be read: {file}. Supported: Excel (.xlsx), PDF, text (.txt, .csv) and .zip of these. |
-| `REJECTED ZIP_REJECTED …` | The zip file {file} cannot be opened safely ({why}). Please upload the files directly. |
-| `REJECTED SCAN_UNREADABLE …` | A scanned page could not be read reliably: {file}, page {page}. Please upload a clearer scan or the Excel/exported file. |
-| `REJECTED OCR_UNAVAILABLE …` | A scanned PDF was found but the scan reader is not available. Please try again later or upload the Excel/exported file. |
-| `REJECTED TOO_MANY_SCAN_PAGES …` | Too many scanned pages were uploaded (limit 200 pages). Please upload the Excel or exported files instead. |
-| `NOT_FOUND <T/A/X>` | The files for this request could not be found. Please upload them and run again. |
-| `UNSUPPORTED_AGENT <A>` | This request was for "{agent}", which this runner does not handle. Only Purchase Register Analyzer is supported. |
-| `ERROR input.json missing or invalid` | The period file (input.json) is missing, or its from/to month is not valid. |
-| `ERROR template not found` | The output template was not found in the config folder. |
-| `ERROR PR columns not found` | A Purchase Register file has no Doc Ref column, or neither an Invoice Value nor a Taxable Value column. Please check the column headers and upload again. |
-| `ERROR too many files …` / `ERROR inputs too large …` / `REJECTED TOO_LARGE …` | Too many files were uploaded (limit 60) or they are too large in total (limit 50 MB). |
-| `ERROR unsafe blob name …` | One of the uploaded file or folder names cannot be processed. Please rename it and upload again. |
-| `ERROR workbook too large …` | The report was created but is too large to save (limit 50 MB). Please run again for a shorter period. |
-| `ERROR AZURE_… not set` / `ERROR TokenError …` / `ERROR HttpResponseError …` / any other `ERROR <ExceptionType> …` from `blob.py` | Could not connect to file storage. Please contact support. |
-| `ERROR setup failed` | The run could not start because of a system problem. Please try again later or contact support. |
-| any other `ERROR …` (including other `blob.py` lines) | The Purchase Register analysis could not be completed because of an unexpected problem. Please contact support. |
-| `INVALID_TRANSACTION` | The request could not be processed because tenant_id, agent_name or transaction_id is missing or not valid. |
+| `DONE <file>`: workbook uploaded, all checks passed | Your Purchase Register report for {period} is ready: {file} |
+| `CHECK_FAILED <file>`: workbook uploaded, a check failed | Your Purchase Register report for {period} is ready, but some final checks didn't pass. Please review it before use: {file} |
+| `NOTHING_TO_DO no PR files for <from>-<to>` (from `verify`) | No entries were found for {period}. Please check the period or upload the right files and try again. |
+| `NOTHING_TO_DO no PR files` (from `prepare`) | No Purchase Register files were found. Please upload your files and try again. |
+| `REJECTED NOT_A_PR …` | Some files don't look like a Purchase Register: {file} ({why}){and_more}. Please remove or replace them and try again. |
+| `REJECTED REVIEW_FAILED …` | We couldn't check your files due to a problem on our side. Please try again later or contact support. |
+| `REJECTED UNSUPPORTED_FILE …` | {file} is a file type we can't read. Please upload Excel (.xlsx), PDF, CSV or text files, or a .zip of these. |
+| `REJECTED ZIP_REJECTED …` | We couldn't open the zip file {file} ({why}). Please upload the files directly instead. |
+| `REJECTED SCAN_UNREADABLE …` | Page {page} of {file} couldn't be read clearly. Please upload a clearer scan or the Excel file. |
+| `REJECTED OCR_UNAVAILABLE …` | We can't read scanned PDFs right now. Please try again later or upload the Excel or exported file. |
+| `REJECTED TOO_MANY_SCAN_PAGES …` | Too many scanned pages (limit 200). Please upload the Excel or exported files instead. |
+| `NOT_FOUND <T/A/X>` | We couldn't find the uploaded files for this request. Please upload them and try again. |
+| `UNSUPPORTED_AGENT <A>` | This service only handles Purchase Register Analyzer requests, not {agent}. |
+| `ERROR input.json missing or invalid` | The reporting period is missing or not valid. Please choose a valid start and end month and try again. |
+| `ERROR template not found` | The report template is missing. Please contact support. |
+| `ERROR PR columns not found` | A Purchase Register file is missing required columns: Doc Ref, and Invoice Value or Taxable Value. Please check the headers and upload again. |
+| `ERROR too many files …` / `ERROR inputs too large …` / `REJECTED TOO_LARGE …` | Your upload is too large (limit 60 files, 50 MB in total). Please upload fewer or smaller files. |
+| `ERROR unsafe blob name …` | A file or folder name has characters we can't process. Please rename it and upload again. |
+| `ERROR workbook too large …` | The report is too large to save (limit 50 MB). Please run it for a shorter period. |
+| `ERROR AZURE_… not set` / `ERROR TokenError …` / `ERROR HttpResponseError …` / any other `ERROR <ExceptionType> …` from `blob.py` | We couldn't reach file storage. Please try again later or contact support. |
+| `ERROR setup failed` | The analysis couldn't start due to a problem on our side. Please try again later or contact support. |
+| any other `ERROR …` (including other `blob.py` lines) | Something went wrong and the analysis couldn't finish. Please try again later or contact support. |
+| `INVALID_TRANSACTION` | This request is missing required details and couldn't be processed. Please contact support. |
 
 For the intake rows, `status ... intake` (section 2b) sends the text from the
 manifest: do not rebuild it. In the rows above, `{why}` and `{file}` are

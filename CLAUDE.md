@@ -19,6 +19,12 @@ backend. It is limited by design:
 - it uses the credentials configured in the task's cloud environment, which the
   run never prints or inspects.
 
+`intake.py` is the only way the run reads the PR files: `python3 intake.py
+prepare work/run work/intake` and `python3 intake.py verify work/run work/intake`
+(with `pr_intake/` and the reviewer agent `.claude/agents/pr-reviewer.md`,
+which reads one preview and replies with one verdict, saved unchanged by the run). The analysis reads only the
+tables it writes to `work/intake/tables/`.
+
 Downloading the run folder with `python3 blob.py pull 'T' 'A' 'X' work/run` is
 the intended first step of every run; `python3 blob.py put` and
 `python3 blob.py status` deliver the result and report it to the backend. See

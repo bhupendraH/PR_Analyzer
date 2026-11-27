@@ -285,8 +285,8 @@ def read_intake_notes(path: Path) -> list:
     return out
 
 
-INTAKE_FALLBACK = ("The Purchase Register analysis could not be completed because of an "
-                   "unexpected problem. Please contact support.")
+INTAKE_FALLBACK = ("Something went wrong and the analysis couldn't finish. "
+                   "Please try again later or contact support.")
 
 
 def read_intake_stop(path: Path) -> list:

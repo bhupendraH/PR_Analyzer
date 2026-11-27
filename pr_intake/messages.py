@@ -17,26 +17,26 @@ _ZIP_WHY = {
 # outcome -> template. Fields: {file} {page} {why} {more} {period}.
 # {file} and {why} are the only parts truncated; guidance text never is.
 _TEMPLATES = {
-    "UNSUPPORTED_FILE": ("The PR folder contains a file type that cannot be read: {file}. "
-                         "Supported: Excel (.xlsx), PDF, text (.txt, .csv) and .zip of these."),
-    "ZIP_REJECTED": ("The zip file {file} cannot be opened safely ({why}). "
-                     "Please upload the files directly."),
-    "OCR_UNAVAILABLE": ("A scanned PDF was found but the scan reader is not available. "
-                        "Please try again later or upload the Excel/exported file."),
-    "TOO_LARGE": ("Too many files were uploaded (limit {max_files}) or they are too large in total "
-                  "(limit {max_mb} MB)."),
-    "TOO_MANY_SCAN_PAGES": ("Too many scanned pages were uploaded (limit {max_ocr} pages). "
+    "UNSUPPORTED_FILE": ("{file} is a file type we can't read. "
+                         "Please upload Excel (.xlsx), PDF, CSV or text files, or a .zip of these."),
+    "ZIP_REJECTED": ("We couldn't open the zip file {file} ({why}). "
+                     "Please upload the files directly instead."),
+    "OCR_UNAVAILABLE": ("We can't read scanned PDFs right now. "
+                        "Please try again later or upload the Excel or exported file."),
+    "TOO_LARGE": ("Your upload is too large (limit {max_files} files, {max_mb} MB in total). "
+                  "Please upload fewer or smaller files."),
+    "TOO_MANY_SCAN_PAGES": ("Too many scanned pages (limit {max_ocr}). "
                             "Please upload the Excel or exported files instead."),
     # NOTHING_TO_DO (no period) is used by prepare; NOTHING_TO_DO_PERIOD by the runner (spec section 9).
-    "NOTHING_TO_DO": "No Purchase Register files were found. Please upload the files and run again.",
-    "NOTHING_TO_DO_PERIOD": ("No Purchase Register files were found for {period}. "
-                             "Please upload the files and run again."),
-    "SCAN_UNREADABLE": ("A scanned page could not be read reliably: {file}, page {page}. "
-                        "Please upload a clearer scan or the Excel/exported file."),
-    "REVIEW_FAILED": ("The PR files could not be checked because of a system problem. "
+    "NOTHING_TO_DO": "No Purchase Register files were found. Please upload your files and try again.",
+    "NOTHING_TO_DO_PERIOD": ("No entries were found for {period}. "
+                             "Please check the period or upload the right files and try again."),
+    "SCAN_UNREADABLE": ("Page {page} of {file} couldn't be read clearly. "
+                        "Please upload a clearer scan or the Excel file."),
+    "REVIEW_FAILED": ("We couldn't check your files due to a problem on our side. "
                       "Please try again later or contact support."),
-    "NOT_A_PR": ("The PR folder contains files that do not look like a Purchase Register: "
-                 "{file} ({why}){and_more}. Please remove or replace them and run again."),
+    "NOT_A_PR": ("Some files don't look like a Purchase Register: "
+                 "{file} ({why}){and_more}. Please remove or replace them and try again."),
 }
 
 KIND_LABELS = {
